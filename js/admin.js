@@ -1,5 +1,11 @@
 /* TNH Scheduling - Admin View */
 
+// Track selected dates for allocation
+let selectedTrainerId = null;
+let selectedTrainerName = null;
+let selectedTrainerEmail = null;
+let selectedDates = [];
+
 function initAdminView() {
     renderAdminViewHTML();
     loadAdminData();
@@ -18,79 +24,183 @@ function initAdminView() {
     document.getElementById('admin-prev-month').onclick = () => {
         state.currentMonth--;
         if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+        clearSelection();
         renderOverviewGrid();
     };
     document.getElementById('admin-next-month').onclick = () => {
         state.currentMonth++;
         if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+        clearSelection();
         renderOverviewGrid();
     };
     
-    // Check availability button
-    document.getElementById('check-avail-btn').onclick = checkAvailableTrainers;
+    // Allocate button
+    document.getElementById('allocate-selected-btn').onclick = openAllocationModal;
+    
+    // Clear selection button
+    document.getElementById('clear-selection-btn').onclick = clearSelection;
 }
+
+function clearSelection() {
+    selectedTrainerId = null;
+    selectedTrainerName = null;
+    selectedTrainerEmail = null;
+    selectedDates = [];
+    updateAllocationButton();
+    renderOverviewGrid();
+}
+
+function updateAllocationButton() {
+    const btn = document.getElementById('allocate-selected-btn');
+    const clearBtn = document.getElementById('clear-selection-btn');
+    const info = document.getElementById('selection-info');
+    
+    if (selectedDates.length > 0) {
+        btn.disabled = false;
+        btn.classList.remove('btn-disabled');
+        clearBtn.classList.remove('hidden');
+        info.textContent = `${selectedTrainerName}: ${selectedDates.length} date(s) selected`;
+        info.classList.remove('hidden');
+    } else {
+        btn.disabled = true;
+        btn.classList.add('btn-disabled');
+        clearBtn.classList.add('hidden');
+        info.classList.add('hidden');
+    }
+}
+
+function toggleDateSelection(trainerId, trainerName, trainerEmail, dateKey) {
+    // If clicking a different trainer, ignore (unless no selection yet)
+    if (selectedTrainerId && selectedTrainerId !== trainerId) {
+        showToast('Clear selection first to choose a different trainer', 'error');
+        return;
+    }
+    
+    // Set trainer if not set
+    if (!selectedTrainerId) {
+        selectedTrainerId = trainerId;
+        selectedTrainerName = trainerName;
+        selectedTrainerEmail = trainerEmail;
+    }
+    
+    // Toggle date
+    const idx = selectedDates.indexOf(dateKey);
+    if (idx > -1) {
+        selectedDates.splice(idx, 1);
+        // If no dates left, clear trainer too
+        if (selectedDates.length === 0) {
+            selectedTrainerId = null;
+            selectedTrainerName = null;
+            selectedTrainerEmail = null;
+        }
+    } else {
+        selectedDates.push(dateKey);
+    }
+    
+    updateAllocationButton();
+    renderOverviewGrid();
+}
+
+function openAllocationModal() {
+    if (selectedDates.length === 0) return;
+    
+    const datesDisplay = selectedDates
+        .sort()
+        .map(d => formatDateShort(new Date(d)))
+        .join(', ');
+    
+    document.getElementById('modal-alloc-trainer').textContent = selectedTrainerName;
+    document.getElementById('modal-alloc-dates').textContent = datesDisplay;
+    document.getElementById('modal-alloc-title').value = '';
+    document.getElementById('modal-alloc-location').value = '';
+    document.getElementById('modal-alloc-client').value = '';
+    document.getElementById('modal-alloc-notes').value = '';
+    document.getElementById('allocation-modal').classList.remove('hidden');
+}
+
+function closeAllocationModal() {
+    document.getElementById('allocation-modal').classList.add('hidden');
+}
+
+async function confirmAllocation() {
+    const title = document.getElementById('modal-alloc-title').value;
+    const location = document.getElementById('modal-alloc-location').value;
+    const client = document.getElementById('modal-alloc-client').value;
+    const notes = document.getElementById('modal-alloc-notes').value;
+    
+    if (!title) {
+        showToast('Please enter a training title', 'error');
+        return;
+    }
+    
+    try {
+        // Create allocation for each selected date
+        for (const dateKey of selectedDates) {
+            await db.collection('allocations').add({
+                trainerId: selectedTrainerId,
+                trainerName: selectedTrainerName,
+                trainerEmail: selectedTrainerEmail,
+                title, date: dateKey, location, client, notes,
+                status: 'pending',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: state.currentUser.uid
+            });
+        }
+        
+        showToast(`Training allocated for ${selectedDates.length} date(s)`, 'success');
+        closeAllocationModal();
+        clearSelection();
+        loadAdminData();
+    } catch (e) {
+        console.error(e);
+        showToast('Error allocating training', 'error');
+    }
+}
+
+window.toggleDateSelection = toggleDateSelection;
+window.closeAllocationModal = closeAllocationModal;
+window.confirmAllocation = confirmAllocation;
 
 function renderAdminViewHTML() {
     document.getElementById('admin-view').innerHTML = `
         <div class="admin-tabs">
             <button class="tab-btn active" data-tab="overview">Availability Overview</button>
-            <button class="tab-btn" data-tab="allocate">Allocate Training</button>
             <button class="tab-btn" data-tab="trainers">Manage Trainers</button>
+            <button class="tab-btn" data-tab="allocations">All Allocations</button>
         </div>
         
         <div id="tab-overview" class="tab-content">
             <div class="content-header">
                 <h2>Trainer Availability</h2>
-                <p>Green = available. Blue = allocated.</p>
+                <p>Click on green cells to select dates, then allocate training.</p>
             </div>
+            
+            <div class="allocation-toolbar">
+                <div class="toolbar-left">
+                    <span id="selection-info" class="selection-info hidden"></span>
+                </div>
+                <div class="toolbar-right">
+                    <button class="btn btn-secondary btn-sm hidden" id="clear-selection-btn">Clear Selection</button>
+                    <button class="btn btn-primary btn-disabled" id="allocate-selected-btn" disabled>Allocate Training</button>
+                </div>
+            </div>
+            
             <div class="calendar-controls">
                 <button class="btn btn-icon" id="admin-prev-month">←</button>
                 <h3 id="admin-month-year"></h3>
                 <button class="btn btn-icon" id="admin-next-month">→</button>
             </div>
+            
             <div class="availability-grid-container">
                 <div class="availability-grid" id="availability-grid"></div>
             </div>
-        </div>
-        
-        <div id="tab-allocate" class="tab-content hidden">
-            <div class="content-header">
-                <h2>Allocate Training</h2>
-                <p>Select a date and assign a trainer.</p>
+            
+            <div class="legend-bar">
+                <div class="legend-item"><span class="legend-dot available"></span> Available</div>
+                <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
+                <div class="legend-item"><span class="legend-dot allocated"></span> Allocated</div>
+                <div class="legend-item"><span class="legend-dot unavailable"></span> Unavailable</div>
             </div>
-            <div class="allocate-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Training Date</label>
-                        <input type="date" id="alloc-date">
-                    </div>
-                    <div class="form-group">
-                        <label>Training Title</label>
-                        <input type="text" id="alloc-title" placeholder="e.g., IOSH Managing Safely">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Location</label>
-                        <input type="text" id="alloc-location" placeholder="e.g., Manchester">
-                    </div>
-                    <div class="form-group">
-                        <label>Client</label>
-                        <input type="text" id="alloc-client" placeholder="e.g., ABC Ltd">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Notes</label>
-                    <textarea id="alloc-notes" rows="2" placeholder="Any additional info..."></textarea>
-                </div>
-                <button class="btn btn-primary" id="check-avail-btn">Check Available Trainers</button>
-            </div>
-            <div id="available-trainers" class="hidden" style="margin-bottom:2rem;">
-                <h3 style="margin-bottom:1rem;">Available on <span id="selected-date"></span></h3>
-                <div id="trainers-for-date" class="trainers-list"></div>
-            </div>
-            <h3 style="margin-bottom:1rem;">All Allocations</h3>
-            <div id="all-allocations" class="allocations-list"></div>
         </div>
         
         <div id="tab-trainers" class="tab-content hidden">
@@ -99,6 +209,47 @@ function renderAdminViewHTML() {
                 <p>View registered trainers and manage admin access.</p>
             </div>
             <div id="trainers-management" class="trainers-list"></div>
+        </div>
+        
+        <div id="tab-allocations" class="tab-content hidden">
+            <div class="content-header">
+                <h2>All Allocations</h2>
+                <p>View and manage all training allocations.</p>
+            </div>
+            <div id="all-allocations" class="allocations-list"></div>
+        </div>
+        
+        <!-- Allocation Modal -->
+        <div id="allocation-modal" class="modal hidden">
+            <div class="modal-content modal-large">
+                <h3>Allocate Training</h3>
+                <div class="modal-info">
+                    <p><strong>Trainer:</strong> <span id="modal-alloc-trainer"></span></p>
+                    <p><strong>Dates:</strong> <span id="modal-alloc-dates"></span></p>
+                </div>
+                <div class="form-group">
+                    <label>Training Title *</label>
+                    <input type="text" id="modal-alloc-title" placeholder="e.g., IOSH Managing Safely">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Location</label>
+                        <input type="text" id="modal-alloc-location" placeholder="e.g., Manchester">
+                    </div>
+                    <div class="form-group">
+                        <label>Client</label>
+                        <input type="text" id="modal-alloc-client" placeholder="e.g., ABC Ltd">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="modal-alloc-notes" rows="2" placeholder="Any additional info..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="closeAllocationModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="confirmAllocation()">Confirm Allocation</button>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -156,103 +307,50 @@ function renderOverviewGrid() {
             const dateKey = getDateKey(new Date(state.currentYear, state.currentMonth, d));
             const isAvail = trainer.availability[dateKey] === true;
             const alloc = state.allocations.find(a => a.date === dateKey && a.trainerId === trainer.id);
+            const isSelected = selectedTrainerId === trainer.id && selectedDates.includes(dateKey);
+            const isOtherTrainerSelected = selectedTrainerId && selectedTrainerId !== trainer.id;
             
             let cls = 'grid-cell';
             let content = '';
-            if (alloc) { cls += ' allocated'; content = '📋'; }
-            else if (isAvail) { cls += ' available'; content = '✓'; }
-            else { cls += ' unavailable'; }
+            let clickable = false;
             
-            html += `<div class="${cls}">${content}</div>`;
+            if (alloc) {
+                cls += ' allocated';
+                content = '📋';
+            } else if (isSelected) {
+                cls += ' selected';
+                content = '✓';
+                clickable = true;
+            } else if (isAvail) {
+                cls += ' available';
+                content = '✓';
+                if (!isOtherTrainerSelected) clickable = true;
+            } else {
+                cls += ' unavailable';
+            }
+            
+            if (clickable) {
+                cls += ' clickable';
+                html += `<div class="${cls}" onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')">${content}</div>`;
+            } else {
+                html += `<div class="${cls}">${content}</div>`;
+            }
         }
     });
     
     grid.innerHTML = html;
 }
 
-function checkAvailableTrainers() {
-    const dateVal = document.getElementById('alloc-date').value;
-    if (!dateVal) { showToast('Select a date', 'error'); return; }
-    
-    const trainers = state.trainers.filter(t => !t.isAdmin && t.availability[dateVal] === true);
-    const allocatedIds = state.allocations.filter(a => a.date === dateVal).map(a => a.trainerId);
-    const available = trainers.filter(t => !allocatedIds.includes(t.id));
-    
-    document.getElementById('selected-date').textContent = formatDate(new Date(dateVal));
-    document.getElementById('available-trainers').classList.remove('hidden');
-    
-    if (!available.length) {
-        document.getElementById('trainers-for-date').innerHTML = '<p class="no-data">No trainers available.</p>';
-        return;
-    }
-    
-    document.getElementById('trainers-for-date').innerHTML = available.map(t => `
-        <div class="trainer-card">
-            <div class="trainer-info">
-                <span class="name">${t.name}</span>
-                <span class="email">${t.email}</span>
-                ${t.phone ? `<span class="phone">${t.phone}</span>` : ''}
-            </div>
-            <button class="btn btn-success" onclick="allocateTrainer('${t.id}','${t.name}','${t.email}')">Allocate</button>
-        </div>
-    `).join('');
-}
-
-async function allocateTrainer(trainerId, trainerName, trainerEmail) {
-    const title = document.getElementById('alloc-title').value;
-    const date = document.getElementById('alloc-date').value;
-    const location = document.getElementById('alloc-location').value;
-    const client = document.getElementById('alloc-client').value;
-    const notes = document.getElementById('alloc-notes').value;
-    
-    if (!title || !date) { showToast('Fill in title and date', 'error'); return; }
-    
-    const confirmed = await showModal('Confirm', `Allocate "${title}" to ${trainerName}?`);
-    if (!confirmed) return;
-    
-    try {
-        await db.collection('allocations').add({
-            trainerId, trainerName, trainerEmail,
-            title, date, location, client, notes,
-            status: 'pending',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            createdBy: state.currentUser.uid
-        });
-        
-        // Try to send email (will fail silently if not configured)
-        try {
-            await emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
-                to_email: trainerEmail,
-                trainer_name: trainerName,
-                training_title: title,
-                training_date: formatDate(new Date(date)),
-                message: 'You have been allocated a training. Please log in to confirm.'
-            });
-        } catch (e) { console.log('Email skipped'); }
-        
-        showToast('Trainer allocated', 'success');
-        
-        // Reset form
-        document.getElementById('alloc-title').value = '';
-        document.getElementById('alloc-date').value = '';
-        document.getElementById('alloc-location').value = '';
-        document.getElementById('alloc-client').value = '';
-        document.getElementById('alloc-notes').value = '';
-        document.getElementById('available-trainers').classList.add('hidden');
-        
-        loadAdminData();
-    } catch (e) {
-        showToast('Error allocating', 'error');
-    }
-}
-
 function renderAllAllocations() {
+    const container = document.getElementById('all-allocations');
+    if (!container) return;
+    
     if (!state.allocations.length) {
-        document.getElementById('all-allocations').innerHTML = '<p class="no-data">No allocations yet.</p>';
+        container.innerHTML = '<p class="no-data">No allocations yet.</p>';
         return;
     }
     
-    document.getElementById('all-allocations').innerHTML = state.allocations.map(a => `
+    container.innerHTML = state.allocations.map(a => `
         <div class="allocation-card ${a.status}">
             <div class="allocation-details">
                 <div class="title">${a.title}</div>
@@ -319,6 +417,8 @@ async function toggleAdmin(userId, makeAdmin) {
 }
 
 // Make functions global
-window.allocateTrainer = allocateTrainer;
 window.cancelAllocation = cancelAllocation;
 window.toggleAdmin = toggleAdmin;
+window.toggleDateSelection = toggleDateSelection;
+window.closeAllocationModal = closeAllocationModal;
+window.confirmAllocation = confirmAllocation;
