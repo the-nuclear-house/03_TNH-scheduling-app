@@ -216,11 +216,12 @@ function renderAdminViewHTML() {
             </div>
             
             <div class="legend-bar">
+                <div class="legend-item"><span class="legend-dot not-set"></span> Not Set</div>
                 <div class="legend-item"><span class="legend-dot available"></span> Available</div>
+                <div class="legend-item"><span class="legend-dot unavailable-confirmed"></span> Unavailable</div>
                 <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
                 <div class="legend-item"><span class="legend-dot allocated"></span> In Person</div>
                 <div class="legend-item"><span class="legend-dot allocated-remote"></span> Remote</div>
-                <div class="legend-item"><span class="legend-dot unavailable"></span> Unavailable</div>
             </div>
         </div>
         
@@ -334,7 +335,9 @@ function renderOverviewGrid() {
         html += `<div class="grid-cell trainer-row-name">${trainer.name}</div>`;
         for (let d = 1; d <= daysInMonth; d++) {
             const dateKey = getDateKey(new Date(state.currentYear, state.currentMonth, d));
-            const isAvail = trainer.availability[dateKey] === true;
+            const availStatus = trainer.availability[dateKey]; // 'available', 'unavailable', true (legacy), or undefined
+            const isAvail = availStatus === 'available' || availStatus === true;
+            const isUnavail = availStatus === 'unavailable';
             const alloc = state.allocations.find(a => a.date === dateKey && a.trainerId === trainer.id);
             const isSelected = selectedTrainerId === trainer.id && selectedDates.includes(dateKey);
             const isOtherTrainerSelected = selectedTrainerId && selectedTrainerId !== trainer.id;
@@ -354,8 +357,11 @@ function renderOverviewGrid() {
                 cls += ' available';
                 content = '✓';
                 if (!isOtherTrainerSelected) clickable = true;
+            } else if (isUnavail) {
+                cls += ' unavailable-confirmed';
+                content = '✗';
             } else {
-                cls += ' unavailable';
+                cls += ' not-set';
             }
             
             if (clickable) {

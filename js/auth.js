@@ -55,13 +55,47 @@ function initAuth() {
     // Register
     registerForm.onsubmit = async (e) => {
         e.preventDefault();
-        const name = document.getElementById('register-name').value;
-        const email = document.getElementById('register-email').value;
-        const phone = document.getElementById('register-phone').value;
+        
+        // Clear previous errors
+        clearFieldErrors();
+        
+        const name = document.getElementById('register-name').value.trim();
+        const email = document.getElementById('register-email').value.trim();
+        const emailConfirm = document.getElementById('register-email-confirm').value.trim();
+        const phone = document.getElementById('register-phone').value.trim();
         const password = document.getElementById('register-password').value;
+        const passwordConfirm = document.getElementById('register-password-confirm').value;
+        
+        // Validation
+        let hasErrors = false;
+        
+        if (!name) {
+            showFieldError('register-name', 'Please enter your full name');
+            hasErrors = true;
+        }
+        
+        if (!email) {
+            showFieldError('register-email', 'Please enter your email address');
+            hasErrors = true;
+        }
+        
+        if (email !== emailConfirm) {
+            showFieldError('register-email-confirm', 'Email addresses do not match');
+            hasErrors = true;
+        }
         
         if (password.length < 6) {
-            showAuthMessage('Password must be at least 6 characters.', 'error');
+            showFieldError('register-password', 'Password must be at least 6 characters');
+            hasErrors = true;
+        }
+        
+        if (password !== passwordConfirm) {
+            showFieldError('register-password-confirm', 'Passwords do not match');
+            hasErrors = true;
+        }
+        
+        if (hasErrors) {
+            showAuthMessage('Please fix the errors above', 'error');
             return;
         }
         
@@ -75,7 +109,15 @@ function initAuth() {
                     profileComplete: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                showToast('Account created', 'success');
+                
+                // Send email verification
+                try {
+                    await cred.user.sendEmailVerification();
+                    showToast('Account created! Please check your email to verify.', 'success');
+                } catch (verifyError) {
+                    console.log('Email verification not sent:', verifyError);
+                    showToast('Account created', 'success');
+                }
             } catch (dbError) {
                 console.error('Firestore error:', dbError);
                 showAuthMessage(`Account created but profile save failed: ${dbError.message}`, 'error');
@@ -122,6 +164,26 @@ function showAuthMessage(msg, type) {
     el.textContent = msg;
     el.className = `auth-message ${type}`;
     el.classList.remove('hidden');
+}
+
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    if (field) {
+        field.classList.add('field-error');
+        // Add error message below field
+        const existingError = field.parentNode.querySelector('.field-error-message');
+        if (existingError) existingError.remove();
+        
+        const errorEl = document.createElement('span');
+        errorEl.className = 'field-error-message';
+        errorEl.textContent = message;
+        field.parentNode.appendChild(errorEl);
+    }
+}
+
+function clearFieldErrors() {
+    document.querySelectorAll('.field-error').forEach(el => el.classList.remove('field-error'));
+    document.querySelectorAll('.field-error-message').forEach(el => el.remove());
 }
 
 function getAuthError(code) {

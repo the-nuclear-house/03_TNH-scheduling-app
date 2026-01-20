@@ -1,5 +1,7 @@
 /* TNH Scheduling - Trainer View */
 
+let selectedDatesTrainer = [];
+
 function initTrainerView() {
     renderTrainerViewHTML();
     loadTrainerData();
@@ -7,12 +9,14 @@ function initTrainerView() {
     document.getElementById('prev-month').onclick = () => {
         state.currentMonth--;
         if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+        clearTrainerSelection();
         renderTrainerCalendar();
     };
     
     document.getElementById('next-month').onclick = () => {
         state.currentMonth++;
         if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+        clearTrainerSelection();
         renderTrainerCalendar();
     };
 }
@@ -23,129 +27,215 @@ function renderTrainerViewHTML() {
         
         <div class="content-header">
             <h2>My Availability</h2>
-            <p>Click on dates to toggle your availability. Green means you're available.</p>
+            <p>Select dates below, then confirm if you're available or not.</p>
         </div>
+        
         <div class="calendar-controls">
             <button class="btn btn-icon" id="prev-month">←</button>
             <h3 id="current-month-year"></h3>
             <button class="btn btn-icon" id="next-month">→</button>
         </div>
+        
+        <!-- Selection Action Bar -->
+        <div id="trainer-action-bar" class="action-bar hidden">
+            <div class="action-bar-info">
+                <span id="selected-count">0</span> date(s) selected
+            </div>
+            <div class="action-bar-buttons">
+                <button class="btn btn-secondary btn-sm" onclick="clearTrainerSelection()">Clear</button>
+                <button class="btn btn-unavailable" onclick="confirmAvailability('unavailable')">Mark Unavailable</button>
+                <button class="btn btn-available" onclick="confirmAvailability('available')">Mark Available</button>
+            </div>
+        </div>
+        
         <div class="calendar-legend">
+            <div class="legend-item"><span class="legend-dot not-set"></span><span>Not Set</span></div>
             <div class="legend-item"><span class="legend-dot available"></span><span>Available</span></div>
-            <div class="legend-item"><span class="legend-dot unavailable"></span><span>Unavailable</span></div>
+            <div class="legend-item"><span class="legend-dot unavailable-confirmed"></span><span>Unavailable</span></div>
             <div class="legend-item"><span class="legend-dot allocated"></span><span>Allocated</span></div>
         </div>
+        
         <div class="calendar" id="trainer-calendar"></div>
-        <h3 style="margin-bottom:1rem;">My Upcoming Trainings</h3>
+        
+        <h3 style="margin: 2rem 0 1rem 0;">My Upcoming Trainings</h3>
         <div id="trainer-allocations" class="allocations-list"></div>
     `;
     
-    // Render profile card
     renderTrainerProfileCard();
 }
 
 async function loadTrainerData() {
-    // Load availability
-    const availDoc = await db.collection('availability').doc(state.currentUser.uid).get();
-    state.availability = availDoc.exists ? (availDoc.data().dates || {}) : {};
-    
-    // Load allocations
-    const allocSnap = await db.collection('allocations')
-        .where('trainerId', '==', state.currentUser.uid)
-        .orderBy('date', 'asc')
-        .get();
-    state.allocations = [];
-    allocSnap.forEach(doc => state.allocations.push({ id: doc.id, ...doc.data() }));
-    
-    renderTrainerCalendar();
-    renderTrainerAllocations();
+    try {
+        // Load availability
+        const availDoc = await db.collection('availability').doc(state.currentUser.uid).get();
+        state.trainerAvailability = availDoc.exists ? (availDoc.data().dates || {}) : {};
+        
+        // Load allocations for this trainer
+        const allocSnap = await db.collection('allocations')
+            .where('trainerId', '==', state.currentUser.uid)
+            .get();
+        state.trainerAllocations = allocSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        renderTrainerCalendar();
+        renderTrainerAllocations();
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showToast('Error loading data', 'error');
+    }
 }
 
 function renderTrainerCalendar() {
+    const calendar = document.getElementById('trainer-calendar');
     document.getElementById('current-month-year').textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
     
     const firstDay = new Date(state.currentYear, state.currentMonth, 1);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - ((firstDay.getDay() + 6) % 7));
-    
+    const lastDay = new Date(state.currentYear, state.currentMonth + 1, 0);
+    const startPad = (firstDay.getDay() + 6) % 7; // Monday = 0
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    let html = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        .map(d => `<div class="calendar-header">${d}</div>`).join('');
+    let html = '<div class="calendar-header"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div><div class="calendar-grid">';
     
-    const currentDate = new Date(startDate);
-    for (let i = 0; i < 42; i++) {
-        const dateKey = getDateKey(currentDate);
-        const isCurrentMonth = currentDate.getMonth() === state.currentMonth;
-        const isToday = currentDate.getTime() === today.getTime();
-        const isAvailable = state.availability[dateKey] === true;
-        const isPast = currentDate < today;
-        const allocation = state.allocations.find(a => a.date === dateKey);
-        
-        let classes = ['calendar-day'];
-        if (!isCurrentMonth) classes.push('other-month');
-        if (isToday) classes.push('today');
-        if (allocation) classes.push('allocated');
-        else if (isAvailable) classes.push('available');
-        if (isWeekend(currentDate)) classes.push('weekend');
-        
-        const clickable = isCurrentMonth && !isPast && !allocation;
-        
-        html += `<div class="${classes.join(' ')}" 
-            ${clickable ? `onclick="toggleAvailability('${dateKey}')"` : 'style="cursor:default"'}>
-            <span class="date-number">${currentDate.getDate()}</span>
-        </div>`;
-        
-        currentDate.setDate(currentDate.getDate() + 1);
+    // Empty cells for padding
+    for (let i = 0; i < startPad; i++) {
+        html += '<div class="calendar-day empty"></div>';
     }
     
-    document.getElementById('trainer-calendar').innerHTML = html;
+    // Days of month
+    for (let d = 1; d <= lastDay.getDate(); d++) {
+        const date = new Date(state.currentYear, state.currentMonth, d);
+        const dateKey = getDateKey(date);
+        const isPast = date < today;
+        const isToday = date.getTime() === today.getTime();
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        
+        // Check status
+        const availStatus = state.trainerAvailability[dateKey]; // 'available', 'unavailable', or undefined
+        const allocation = state.trainerAllocations.find(a => a.date === dateKey);
+        const isSelected = selectedDatesTrainer.includes(dateKey);
+        
+        let cls = 'calendar-day';
+        let statusIcon = '';
+        let clickable = false;
+        
+        if (allocation) {
+            cls += ' allocated';
+            statusIcon = allocation.trainingType === 'remote' ? '💻' : '📍';
+        } else if (isSelected) {
+            cls += ' selected';
+            statusIcon = '●';
+            clickable = !isPast;
+        } else if (availStatus === 'available') {
+            cls += ' available';
+            statusIcon = '✓';
+            clickable = !isPast;
+        } else if (availStatus === 'unavailable') {
+            cls += ' unavailable-confirmed';
+            statusIcon = '✗';
+            clickable = !isPast;
+        } else {
+            cls += ' not-set';
+            clickable = !isPast;
+        }
+        
+        if (isPast) cls += ' past';
+        if (isToday) cls += ' today';
+        if (isWeekend) cls += ' weekend';
+        
+        if (clickable) {
+            html += `<div class="${cls}" onclick="toggleTrainerDate('${dateKey}')"><span class="day-number">${d}</span><span class="day-status">${statusIcon}</span></div>`;
+        } else {
+            html += `<div class="${cls}"><span class="day-number">${d}</span><span class="day-status">${statusIcon}</span></div>`;
+        }
+    }
+    
+    html += '</div>';
+    calendar.innerHTML = html;
 }
 
-async function toggleAvailability(dateKey) {
-    const current = state.availability[dateKey] || false;
-    state.availability[dateKey] = !current;
+function toggleTrainerDate(dateKey) {
+    const idx = selectedDatesTrainer.indexOf(dateKey);
+    if (idx > -1) {
+        selectedDatesTrainer.splice(idx, 1);
+    } else {
+        selectedDatesTrainer.push(dateKey);
+    }
+    updateTrainerActionBar();
+    renderTrainerCalendar();
+}
+
+function updateTrainerActionBar() {
+    const bar = document.getElementById('trainer-action-bar');
+    const count = document.getElementById('selected-count');
+    
+    if (selectedDatesTrainer.length > 0) {
+        bar.classList.remove('hidden');
+        count.textContent = selectedDatesTrainer.length;
+    } else {
+        bar.classList.add('hidden');
+    }
+}
+
+function clearTrainerSelection() {
+    selectedDatesTrainer = [];
+    updateTrainerActionBar();
+    renderTrainerCalendar();
+}
+
+async function confirmAvailability(status) {
+    if (selectedDatesTrainer.length === 0) return;
     
     try {
-        await db.collection('availability').doc(state.currentUser.uid).set(
-            { dates: state.availability, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-            { merge: true }
-        );
-        renderTrainerCalendar();
-        showToast(state.availability[dateKey] ? 'Marked available' : 'Marked unavailable', 'success');
-    } catch (e) {
-        state.availability[dateKey] = current;
-        showToast('Error saving', 'error');
+        // Update local state
+        selectedDatesTrainer.forEach(dateKey => {
+            state.trainerAvailability[dateKey] = status;
+        });
+        
+        // Save to Firestore
+        await db.collection('availability').doc(state.currentUser.uid).set({
+            dates: state.trainerAvailability,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        const statusText = status === 'available' ? 'available' : 'unavailable';
+        showToast(`${selectedDatesTrainer.length} date(s) marked as ${statusText}`, 'success');
+        
+        clearTrainerSelection();
+    } catch (error) {
+        console.error('Error saving availability:', error);
+        showToast('Error saving availability', 'error');
     }
 }
 
 function renderTrainerAllocations() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const upcoming = state.allocations.filter(a => new Date(a.date) >= today);
+    const container = document.getElementById('trainer-allocations');
+    const upcoming = state.trainerAllocations
+        .filter(a => new Date(a.date) >= new Date())
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
     
     if (!upcoming.length) {
-        document.getElementById('trainer-allocations').innerHTML = '<p class="no-data">No upcoming trainings.</p>';
+        container.innerHTML = '<p class="no-data">No upcoming trainings allocated.</p>';
         return;
     }
     
-    document.getElementById('trainer-allocations').innerHTML = upcoming.map(a => `
-        <div class="allocation-card ${a.status}">
+    container.innerHTML = upcoming.map(a => `
+        <div class="allocation-card trainer-allocation ${a.status}">
             <div class="allocation-details">
                 <div class="title">${a.title}</div>
                 <div class="meta">
                     <span>📅 ${formatDate(new Date(a.date))}</span>
+                    <span>${a.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</span>
                     ${a.location ? `<span>📍 ${a.location}</span>` : ''}
                     ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
                 </div>
+                ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;">
+            <div class="allocation-actions">
                 <span class="status-badge ${a.status}">${a.status}</span>
                 ${a.status === 'pending' ? `
-                    <div style="display:flex;gap:0.5rem;">
-                        <button class="btn btn-success btn-sm" onclick="respondAllocation('${a.id}','confirmed')">Confirm</button>
-                        <button class="btn btn-danger btn-sm" onclick="respondAllocation('${a.id}','declined')">Decline</button>
+                    <div class="response-buttons">
+                        <button class="btn btn-success btn-sm" onclick="respondToAllocation('${a.id}', 'confirmed')">Confirm</button>
+                        <button class="btn btn-secondary btn-sm" onclick="respondToAllocation('${a.id}', 'declined')">Decline</button>
                     </div>
                 ` : ''}
             </div>
@@ -153,19 +243,26 @@ function renderTrainerAllocations() {
     `).join('');
 }
 
-async function respondAllocation(id, status) {
+async function respondToAllocation(allocId, response) {
     try {
-        await db.collection('allocations').doc(id).update({
-            status,
+        await db.collection('allocations').doc(allocId).update({
+            status: response,
             respondedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        showToast(`Training ${status}`, 'success');
-        loadTrainerData();
-    } catch (e) {
-        showToast('Error updating', 'error');
+        
+        // Update local state
+        const alloc = state.trainerAllocations.find(a => a.id === allocId);
+        if (alloc) alloc.status = response;
+        
+        showToast(`Training ${response}`, 'success');
+        renderTrainerAllocations();
+    } catch (error) {
+        showToast('Error responding', 'error');
     }
 }
 
 // Make functions global
-window.toggleAvailability = toggleAvailability;
-window.respondAllocation = respondAllocation;
+window.toggleTrainerDate = toggleTrainerDate;
+window.clearTrainerSelection = clearTrainerSelection;
+window.confirmAvailability = confirmAvailability;
+window.respondToAllocation = respondToAllocation;
