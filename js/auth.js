@@ -61,19 +61,26 @@ function initAuth() {
         const password = document.getElementById('register-password').value;
         
         if (password.length < 6) {
-            showAuthMessage('Password must be at least 6 characters', 'error');
+            showAuthMessage('Password must be at least 6 characters.', 'error');
             return;
         }
         
         try {
             const cred = await auth.createUserWithEmailAndPassword(email, password);
             const isAdmin = email.toLowerCase() === appConfig.initialAdminEmail.toLowerCase();
-            await db.collection('users').doc(cred.user.uid).set({
-                name, email, phone, isAdmin,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            showToast('Account created', 'success');
+            
+            try {
+                await db.collection('users').doc(cred.user.uid).set({
+                    name, email, phone, isAdmin,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                showToast('Account created', 'success');
+            } catch (dbError) {
+                console.error('Firestore error:', dbError);
+                showAuthMessage(`Account created but profile save failed: ${dbError.message}`, 'error');
+            }
         } catch (error) {
+            console.error('Auth error:', error);
             showAuthMessage(getAuthError(error.code), 'error');
         }
     };
@@ -118,14 +125,18 @@ function showAuthMessage(msg, type) {
 
 function getAuthError(code) {
     const errors = {
-        'auth/email-already-in-use': 'Email already registered',
-        'auth/invalid-email': 'Invalid email',
-        'auth/user-not-found': 'No account found',
-        'auth/wrong-password': 'Incorrect password',
-        'auth/invalid-credential': 'Invalid email or password',
-        'auth/too-many-requests': 'Too many attempts, try later'
+        'auth/email-already-in-use': 'This email is already registered. Try signing in instead.',
+        'auth/invalid-email': 'Please enter a valid email address.',
+        'auth/user-not-found': 'No account found with this email. Please register first.',
+        'auth/wrong-password': 'Incorrect password. Please try again.',
+        'auth/invalid-credential': 'Invalid email or password. Please check and try again.',
+        'auth/too-many-requests': 'Too many failed attempts. Please wait a few minutes and try again.',
+        'auth/weak-password': 'Password is too weak. Use at least 6 characters.',
+        'auth/network-request-failed': 'Network error. Please check your internet connection.',
+        'auth/user-disabled': 'This account has been disabled. Contact your administrator.',
+        'auth/operation-not-allowed': 'Email/password sign-in is not enabled. Contact your administrator.'
     };
-    return errors[code] || 'An error occurred';
+    return errors[code] || `Error: ${code || 'Unknown error. Please try again.'}`;
 }
 
 function showAuthScreen() {
