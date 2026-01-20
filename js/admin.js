@@ -115,11 +115,25 @@ function openAllocationModal() {
     document.getElementById('modal-alloc-location').value = '';
     document.getElementById('modal-alloc-client').value = '';
     document.getElementById('modal-alloc-notes').value = '';
+    document.getElementById('modal-alloc-rate').value = '';
     document.getElementById('modal-alloc-type').value = 'in-person';
     
     // Reset type buttons
     document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector('.type-btn.in-person').classList.add('active');
+    
+    // Show rate field only for freelancers
+    const trainer = state.trainers.find(t => t.id === selectedTrainerId);
+    const rateField = document.getElementById('rate-field-group');
+    if (trainer?.employmentType === 'freelancer') {
+        rateField.style.display = 'block';
+        // Pre-fill with trainer's default rate if set
+        if (trainer.dayRate) {
+            document.getElementById('modal-alloc-rate').value = trainer.dayRate;
+        }
+    } else {
+        rateField.style.display = 'none';
+    }
     
     document.getElementById('allocation-modal').classList.remove('hidden');
 }
@@ -140,6 +154,7 @@ async function confirmAllocation() {
     const client = document.getElementById('modal-alloc-client').value;
     const notes = document.getElementById('modal-alloc-notes').value;
     const trainingType = document.getElementById('modal-alloc-type').value;
+    const rate = document.getElementById('modal-alloc-rate').value;
     
     if (!title) {
         showToast('Please enter a training title', 'error');
@@ -149,10 +164,14 @@ async function confirmAllocation() {
     // Generate a unique group ID for this multi-day training
     const groupId = 'grp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
+    // Check if trainer is freelancer
+    const trainer = state.trainers.find(t => t.id === selectedTrainerId);
+    const isFreelancer = trainer?.employmentType === 'freelancer';
+    
     try {
         // Create allocation for each selected date
         for (const dateKey of selectedDates) {
-            await db.collection('allocations').add({
+            const allocData = {
                 trainerId: selectedTrainerId,
                 trainerName: selectedTrainerName,
                 trainerEmail: selectedTrainerEmail,
@@ -160,9 +179,17 @@ async function confirmAllocation() {
                 trainingType,
                 groupId,
                 status: 'pending',
+                delivered: false,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: state.currentUser.uid
-            });
+            };
+            
+            // Only add rate for freelancers
+            if (isFreelancer && rate) {
+                allocData.trainerRate = parseFloat(rate);
+            }
+            
+            await db.collection('allocations').add(allocData);
         }
         
         showToast(`Training allocated for ${selectedDates.length} date(s)`, 'success');
@@ -220,8 +247,8 @@ function renderAdminViewHTML() {
                 <div class="legend-item"><span class="legend-dot available"></span> Available</div>
                 <div class="legend-item"><span class="legend-dot unavailable-confirmed"></span> Unavailable</div>
                 <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
-                <div class="legend-item"><span class="legend-dot allocated"></span> In Person</div>
-                <div class="legend-item"><span class="legend-dot allocated-remote"></span> Remote</div>
+                <div class="legend-item"><span class="legend-dot allocated"></span> 📍 In Person / 💻 Remote</div>
+                <div class="legend-item"><span class="legend-dot delivered"></span> ✅ Delivered</div>
             </div>
         </div>
         
@@ -271,6 +298,10 @@ function renderAdminViewHTML() {
                         <input type="text" id="modal-alloc-client" placeholder="e.g., ABC Ltd">
                     </div>
                 </div>
+                <div class="form-group" id="rate-field-group" style="display:none;">
+                    <label>Trainer Rate (£) <span class="hint">- Freelancer only, not visible to trainer</span></label>
+                    <input type="number" id="modal-alloc-rate" placeholder="e.g., 350">
+                </div>
                 <div class="form-group">
                     <label>Notes</label>
                     <textarea id="modal-alloc-notes" rows="2" placeholder="Any additional info..."></textarea>
@@ -279,6 +310,15 @@ function renderAdminViewHTML() {
                     <button class="btn btn-secondary" onclick="closeAllocationModal()">Cancel</button>
                     <button class="btn btn-primary" onclick="confirmAllocation()">Confirm Allocation</button>
                 </div>
+            </div>
+        </div>
+        
+        <!-- Allocation Details Modal (for clicking on allocated cells) -->
+        <div id="allocation-details-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>Training Details</h3>
+                <div id="allocation-details-content"></div>
+                <div class="modal-actions" id="allocation-details-actions"></div>
             </div>
         </div>
     `;
@@ -335,7 +375,7 @@ function renderOverviewGrid() {
         html += `<div class="grid-cell trainer-row-name">${trainer.name}</div>`;
         for (let d = 1; d <= daysInMonth; d++) {
             const dateKey = getDateKey(new Date(state.currentYear, state.currentMonth, d));
-            const availStatus = trainer.availability[dateKey]; // 'available', 'unavailable', true (legacy), or undefined
+            const availStatus = trainer.availability[dateKey];
             const isAvail = availStatus === 'available' || availStatus === true;
             const isUnavail = availStatus === 'unavailable';
             const alloc = state.allocations.find(a => a.date === dateKey && a.trainerId === trainer.id);
@@ -344,19 +384,30 @@ function renderOverviewGrid() {
             
             let cls = 'grid-cell';
             let content = '';
-            let clickable = false;
+            let clickHandler = '';
             
             if (alloc) {
-                cls += alloc.trainingType === 'remote' ? ' allocated-remote' : ' allocated';
-                content = alloc.trainingType === 'remote' ? '💻' : '📍';
+                // Allocated - clickable to see details
+                if (alloc.delivered) {
+                    cls += ' delivered';
+                    content = '✅';
+                } else {
+                    cls += ' allocated';
+                    content = alloc.trainingType === 'remote' ? '💻' : '📍';
+                }
+                cls += ' clickable';
+                clickHandler = `onclick="showAllocationDetails('${alloc.id}')"`;
             } else if (isSelected) {
                 cls += ' selected';
                 content = '✓';
-                clickable = true;
+                clickHandler = `onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')"`;
             } else if (isAvail) {
                 cls += ' available';
                 content = '✓';
-                if (!isOtherTrainerSelected) clickable = true;
+                if (!isOtherTrainerSelected) {
+                    cls += ' clickable';
+                    clickHandler = `onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')"`;
+                }
             } else if (isUnavail) {
                 cls += ' unavailable-confirmed';
                 content = '✗';
@@ -364,12 +415,7 @@ function renderOverviewGrid() {
                 cls += ' not-set';
             }
             
-            if (clickable) {
-                cls += ' clickable';
-                html += `<div class="${cls}" onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')">${content}</div>`;
-            } else {
-                html += `<div class="${cls}">${content}</div>`;
-            }
+            html += `<div class="${cls}" ${clickHandler}>${content}</div>`;
         }
     });
     
@@ -730,3 +776,73 @@ window.closeAllocationModal = closeAllocationModal;
 window.confirmAllocation = confirmAllocation;
 window.setTrainingType = setTrainingType;
 window.cancelTraining = cancelTraining;
+window.showAllocationDetails = showAllocationDetails;
+window.closeAllocationDetailsModal = closeAllocationDetailsModal;
+window.markAsDelivered = markAsDelivered;
+
+function showAllocationDetails(allocId) {
+    const alloc = state.allocations.find(a => a.id === allocId);
+    if (!alloc) return;
+    
+    // Find all allocations in the same group
+    const groupAllocs = alloc.groupId 
+        ? state.allocations.filter(a => a.groupId === alloc.groupId)
+        : [alloc];
+    
+    const sortedDates = groupAllocs.map(a => a.date).sort();
+    const startDate = new Date(sortedDates[0]);
+    const endDate = new Date(sortedDates[sortedDates.length - 1]);
+    const dateDisplay = sortedDates.length === 1 
+        ? formatDate(startDate)
+        : `${formatDateShort(startDate)} - ${formatDateShort(endDate)} (${sortedDates.length} days)`;
+    
+    const trainer = state.trainers.find(t => t.id === alloc.trainerId);
+    const isFreelancer = trainer?.employmentType === 'freelancer';
+    
+    const content = document.getElementById('allocation-details-content');
+    content.innerHTML = `
+        <div class="details-grid">
+            <div class="detail-row"><strong>Training:</strong> ${alloc.title}</div>
+            <div class="detail-row"><strong>Trainer:</strong> ${alloc.trainerName}</div>
+            <div class="detail-row"><strong>Dates:</strong> ${dateDisplay}</div>
+            <div class="detail-row"><strong>Type:</strong> ${alloc.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</div>
+            ${alloc.location ? `<div class="detail-row"><strong>Location:</strong> ${alloc.location}</div>` : ''}
+            ${alloc.client ? `<div class="detail-row"><strong>Client:</strong> ${alloc.client}</div>` : ''}
+            <div class="detail-row"><strong>Status:</strong> <span class="status-badge ${alloc.status}">${alloc.status}</span></div>
+            <div class="detail-row"><strong>Delivered:</strong> ${alloc.delivered ? '✅ Yes' : '⏳ Not yet'}</div>
+            ${isFreelancer && alloc.trainerRate ? `<div class="detail-row"><strong>Rate:</strong> £${alloc.trainerRate}/day (Total: £${alloc.trainerRate * sortedDates.length})</div>` : ''}
+            ${alloc.notes ? `<div class="detail-row"><strong>Notes:</strong> ${alloc.notes}</div>` : ''}
+        </div>
+    `;
+    
+    const allIds = groupAllocs.map(a => a.id).join(',');
+    const actions = document.getElementById('allocation-details-actions');
+    actions.innerHTML = `
+        <button class="btn btn-secondary" onclick="closeAllocationDetailsModal()">Close</button>
+        ${!alloc.delivered ? `<button class="btn btn-success" onclick="markAsDelivered('${allIds}')">Mark Delivered</button>` : ''}
+        <button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Cancel Training</button>
+    `;
+    
+    document.getElementById('allocation-details-modal').classList.remove('hidden');
+}
+
+function closeAllocationDetailsModal() {
+    document.getElementById('allocation-details-modal').classList.add('hidden');
+}
+
+async function markAsDelivered(idsString) {
+    const ids = idsString.split(',');
+    try {
+        for (const id of ids) {
+            await db.collection('allocations').doc(id).update({
+                delivered: true,
+                deliveredAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+        showToast('Training marked as delivered', 'success');
+        closeAllocationDetailsModal();
+        loadAdminData();
+    } catch (e) {
+        showToast('Error updating', 'error');
+    }
+}

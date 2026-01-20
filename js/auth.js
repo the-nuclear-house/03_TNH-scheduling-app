@@ -102,10 +102,12 @@ function initAuth() {
         try {
             const cred = await auth.createUserWithEmailAndPassword(email, password);
             const isAdmin = email.toLowerCase() === appConfig.initialAdminEmail.toLowerCase();
+            const employmentType = document.querySelector('input[name="employment-type"]:checked')?.value || 'employee';
             
             try {
                 await db.collection('users').doc(cred.user.uid).set({
                     name, email, phone, isAdmin,
+                    employmentType,
                     profileComplete: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });

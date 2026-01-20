@@ -210,7 +210,7 @@ async function confirmAvailability(status) {
 function renderTrainerAllocations() {
     const container = document.getElementById('trainer-allocations');
     const upcoming = state.trainerAllocations
-        .filter(a => new Date(a.date) >= new Date())
+        .filter(a => new Date(a.date) >= new Date(new Date().setHours(0,0,0,0) - 86400000 * 30)) // Include last 30 days for delivery marking
         .sort((a, b) => new Date(a.date) - new Date(b.date));
     
     if (!upcoming.length) {
@@ -218,30 +218,62 @@ function renderTrainerAllocations() {
         return;
     }
     
-    container.innerHTML = upcoming.map(a => `
-        <div class="allocation-card trainer-allocation ${a.status}">
-            <div class="allocation-details">
-                <div class="title">${a.title}</div>
-                <div class="meta">
-                    <span>📅 ${formatDate(new Date(a.date))}</span>
-                    <span>${a.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</span>
-                    ${a.location ? `<span>📍 ${a.location}</span>` : ''}
-                    ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
-                </div>
-                ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
-            </div>
-            <div class="allocation-actions">
-                <span class="status-badge ${a.status}">${a.status}</span>
-                ${a.status === 'pending' ? `
-                    <div class="response-buttons">
-                        <button class="btn btn-success btn-sm" onclick="respondToAllocation('${a.id}', 'confirmed')">Confirm</button>
-                        <button class="btn btn-secondary btn-sm" onclick="respondToAllocation('${a.id}', 'declined')">Decline</button>
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    container.innerHTML = upcoming.map(a => {
+        const trainingDate = new Date(a.date);
+        const isPast = trainingDate < today;
+        const canMarkDelivered = isPast && a.status === 'confirmed' && !a.delivered;
+        
+        return `
+            <div class="allocation-card trainer-allocation ${a.status} ${a.delivered ? 'delivered' : ''}">
+                <div class="allocation-details">
+                    <div class="title">${a.title} ${a.delivered ? '✅' : ''}</div>
+                    <div class="meta">
+                        <span>📅 ${formatDate(new Date(a.date))}</span>
+                        <span>${a.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</span>
+                        ${a.location ? `<span>📍 ${a.location}</span>` : ''}
+                        ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
                     </div>
-                ` : ''}
+                    ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
+                </div>
+                <div class="allocation-actions">
+                    <span class="status-badge ${a.status}">${a.delivered ? 'delivered' : a.status}</span>
+                    ${a.status === 'pending' ? `
+                        <div class="response-buttons">
+                            <button class="btn btn-success btn-sm" onclick="respondToAllocation('${a.id}', 'confirmed')">Confirm</button>
+                            <button class="btn btn-secondary btn-sm" onclick="respondToAllocation('${a.id}', 'declined')">Decline</button>
+                        </div>
+                    ` : ''}
+                    ${canMarkDelivered ? `
+                        <button class="btn btn-primary btn-sm" onclick="markTrainingDelivered('${a.id}')">Mark Delivered</button>
+                    ` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
+async function markTrainingDelivered(allocId) {
+    try {
+        await db.collection('allocations').doc(allocId).update({
+            delivered: true,
+            deliveredAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        const alloc = state.trainerAllocations.find(a => a.id === allocId);
+        if (alloc) alloc.delivered = true;
+        
+        showToast('Training marked as delivered', 'success');
+        renderTrainerAllocations();
+        renderTrainerCalendar();
+    } catch (error) {
+        showToast('Error updating', 'error');
+    }
+}
+
+window.markTrainingDelivered = markTrainingDelivered;
 
 async function respondToAllocation(allocId, response) {
     try {
