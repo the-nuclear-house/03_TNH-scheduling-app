@@ -94,7 +94,8 @@ function renderTrainerCalendar() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    let html = '<div class="calendar-header"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div><div class="calendar-grid">';
+    // Header row
+    let html = '<div class="calendar-header">Mon</div><div class="calendar-header">Tue</div><div class="calendar-header">Wed</div><div class="calendar-header">Thu</div><div class="calendar-header">Fri</div><div class="calendar-header">Sat</div><div class="calendar-header">Sun</div>';
     
     // Empty cells for padding
     for (let i = 0; i < startPad; i++) {
@@ -110,7 +111,7 @@ function renderTrainerCalendar() {
         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
         
         // Check status
-        const availStatus = state.trainerAvailability[dateKey]; // 'available', 'unavailable', or undefined
+        const availStatus = state.trainerAvailability[dateKey];
         const allocation = state.trainerAllocations.find(a => a.date === dateKey);
         const isSelected = selectedDatesTrainer.includes(dateKey);
         
@@ -119,8 +120,13 @@ function renderTrainerCalendar() {
         let clickable = false;
         
         if (allocation) {
-            cls += ' allocated';
-            statusIcon = allocation.trainingType === 'remote' ? '💻' : '📍';
+            if (allocation.delivered) {
+                cls += ' delivered';
+                statusIcon = '✅';
+            } else {
+                cls += ' allocated';
+                statusIcon = allocation.trainingType === 'remote' ? '💻' : '📍';
+            }
         } else if (isSelected) {
             cls += ' selected';
             statusIcon = '●';
@@ -149,7 +155,6 @@ function renderTrainerCalendar() {
         }
     }
     
-    html += '</div>';
     calendar.innerHTML = html;
 }
 
