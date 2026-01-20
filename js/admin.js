@@ -636,6 +636,7 @@ function viewTrainerProfile(trainerId) {
                     <h3 style="margin:0">${trainer.name}</h3>
                     <p style="margin:0.25rem 0;color:var(--tnh-steel)">${trainer.email}</p>
                     ${trainer.phone ? `<p style="margin:0;color:var(--tnh-steel)">${trainer.phone}</p>` : ''}
+                    <span class="badge ${trainer.employmentType === 'freelancer' ? 'badge-warning' : 'badge-info'}">${trainer.employmentType === 'freelancer' ? 'Freelancer' : 'TNH Employee'}</span>
                 </div>
             </div>
             
@@ -659,19 +660,22 @@ function viewTrainerProfile(trainerId) {
                 </div>
                 ${trainer.bio ? `<div><strong>Bio:</strong><br>${trainer.bio}</div>` : ''}
                 <div>
-                    <strong>Trainings Completed:</strong> ${trainerAllocations.filter(a => a.status === 'confirmed').length}
+                    <strong>Trainings Completed:</strong> ${trainerAllocations.filter(a => a.delivered).length}
                 </div>
                 <div>
                     <strong>Admin Rating:</strong> 
                     <span class="star-rating">${renderStars(trainer.adminRating || 0)}</span>
                 </div>
                 ${trainer.adminNotes ? `<div><strong>Admin Notes:</strong><br>${trainer.adminNotes}</div>` : ''}
-                ${trainer.dayRate ? `<div><strong>Day Rate:</strong> £${trainer.dayRate}</div>` : ''}
+                ${trainer.employmentType === 'freelancer' && trainer.dayRate ? `<div><strong>Day Rate:</strong> £${trainer.dayRate}</div>` : ''}
             </div>
             
-            <div class="form-actions">
-                <button class="btn btn-secondary" onclick="document.getElementById('view-trainer-modal').remove()">Close</button>
-                <button class="btn btn-primary" onclick="document.getElementById('view-trainer-modal').remove(); editTrainerAdmin('${trainerId}')">Edit</button>
+            <div class="form-actions" style="justify-content:space-between;">
+                <button class="btn btn-danger" onclick="confirmDeleteTrainer('${trainerId}', '${trainer.name.replace(/'/g, "\\'")}')">Delete Trainer</button>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('view-trainer-modal').remove()">Close</button>
+                    <button class="btn btn-primary" onclick="document.getElementById('view-trainer-modal').remove(); editTrainerAdmin('${trainerId}')">Edit</button>
+                </div>
             </div>
         </div>
     `;
@@ -779,6 +783,143 @@ window.cancelTraining = cancelTraining;
 window.showAllocationDetails = showAllocationDetails;
 window.closeAllocationDetailsModal = closeAllocationDetailsModal;
 window.markAsDelivered = markAsDelivered;
+window.confirmDeleteTrainer = confirmDeleteTrainer;
+window.proceedToReauth = proceedToReauth;
+window.executeTrainerDeletion = executeTrainerDeletion;
+window.closeDeleteModals = closeDeleteModals;
+
+// Delete trainer with confirmation and re-authentication
+let trainerToDelete = null;
+
+function confirmDeleteTrainer(trainerId, trainerName) {
+    trainerToDelete = { id: trainerId, name: trainerName };
+    
+    // Close the profile modal
+    document.getElementById('view-trainer-modal')?.remove();
+    
+    // Show confirmation modal
+    const modal = document.createElement('div');
+    modal.id = 'delete-confirm-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>⚠️ Delete Trainer</h3>
+            <p>Are you sure you want to delete <strong>${trainerName}</strong>?</p>
+            <p style="color:var(--tnh-orange);font-size:0.9rem;margin-top:0.5rem;">
+                This will permanently remove their profile, availability data, and cannot be undone. 
+                Their allocation history will be preserved for records.
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModals()">Cancel</button>
+                <button class="btn btn-danger" onclick="proceedToReauth()">Yes, Delete Trainer</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function proceedToReauth() {
+    // Close confirmation modal
+    document.getElementById('delete-confirm-modal')?.remove();
+    
+    // Show re-authentication modal
+    const modal = document.createElement('div');
+    modal.id = 'reauth-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>🔐 Confirm Your Identity</h3>
+            <p>For security, please enter your password to confirm this deletion.</p>
+            <div class="form-group" style="margin:1rem 0;">
+                <label>Your Password</label>
+                <input type="password" id="reauth-password" placeholder="Enter your password" class="form-input">
+            </div>
+            <div id="reauth-error" class="auth-message error hidden"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeDeleteModals()">Cancel</button>
+                <button class="btn btn-danger" onclick="executeTrainerDeletion()">Confirm & Delete</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Focus password field
+    setTimeout(() => document.getElementById('reauth-password')?.focus(), 100);
+    
+    // Allow Enter key to submit
+    document.getElementById('reauth-password').onkeydown = (e) => {
+        if (e.key === 'Enter') executeTrainerDeletion();
+    };
+}
+
+async function executeTrainerDeletion() {
+    const password = document.getElementById('reauth-password')?.value;
+    const errorEl = document.getElementById('reauth-error');
+    
+    if (!password) {
+        errorEl.textContent = 'Please enter your password';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+    
+    if (!trainerToDelete) {
+        closeDeleteModals();
+        return;
+    }
+    
+    try {
+        // Re-authenticate the admin
+        const credential = firebase.auth.EmailAuthProvider.credential(
+            state.currentUser.email,
+            password
+        );
+        
+        await state.currentUser.reauthenticateWithCredential(credential);
+        
+        // Authentication successful - proceed with deletion
+        showToast('Deleting trainer...', 'info');
+        
+        // Delete user document
+        await db.collection('users').doc(trainerToDelete.id).delete();
+        
+        // Delete availability document
+        await db.collection('availability').doc(trainerToDelete.id).delete();
+        
+        // Note: We keep allocations for historical records, just the trainer is removed
+        
+        // Try to delete their profile photo from storage
+        try {
+            const photoRef = firebase.storage().ref().child(`profile-photos/${trainerToDelete.id}`);
+            await photoRef.delete();
+        } catch (e) {
+            // Photo might not exist, that's fine
+        }
+        
+        showToast(`${trainerToDelete.name} has been deleted`, 'success');
+        closeDeleteModals();
+        
+        // Refresh the trainer list
+        loadAdminData();
+        
+    } catch (error) {
+        console.error('Deletion error:', error);
+        
+        if (error.code === 'auth/wrong-password') {
+            errorEl.textContent = 'Incorrect password. Please try again.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorEl.textContent = 'Too many attempts. Please wait and try again.';
+        } else {
+            errorEl.textContent = 'Error: ' + error.message;
+        }
+        errorEl.classList.remove('hidden');
+    }
+}
+
+function closeDeleteModals() {
+    document.getElementById('delete-confirm-modal')?.remove();
+    document.getElementById('reauth-modal')?.remove();
+    trainerToDelete = null;
+}
 
 function showAllocationDetails(allocId) {
     const alloc = state.allocations.find(a => a.id === allocId);

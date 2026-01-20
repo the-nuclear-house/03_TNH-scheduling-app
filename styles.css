@@ -51,8 +51,8 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .btn-secondary:hover { background: var(--tnh-medium-grey); }
 .btn-success { background: var(--tnh-green); color: white; }
 .btn-success:hover { background: #7ab840; }
-.btn-danger { background: var(--tnh-orange); color: white; }
-.btn-danger:hover { background: #a84400; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-danger:hover { background: #dc2626; }
 .btn-icon { width: 40px; height: 40px; padding: 0; background: white; border: 1px solid var(--tnh-light-grey); font-size: 1.25rem; color: var(--tnh-steel); }
 .btn-sm { padding: 0.5rem 1rem; font-size: 0.8125rem; }
 
