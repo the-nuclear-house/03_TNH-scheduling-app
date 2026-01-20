@@ -78,6 +78,9 @@ async function loadTrainerData() {
         
         renderTrainerCalendar();
         renderTrainerAllocations();
+        
+        // Check for pending allocations and show notification
+        checkPendingAllocations();
     } catch (error) {
         console.error('Error loading data:', error);
         showToast('Error loading data', 'error');
@@ -242,13 +245,14 @@ function renderTrainerAllocations() {
                         ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
                     </div>
                     ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
+                    ${a.declineReason ? `<div class="decline-reason"><strong>Decline reason:</strong> ${a.declineReason}</div>` : ''}
                 </div>
                 <div class="allocation-actions">
                     <span class="status-badge ${a.status}">${a.delivered ? 'delivered' : a.status}</span>
                     ${a.status === 'pending' ? `
                         <div class="response-buttons">
                             <button class="btn btn-success btn-sm" onclick="respondToAllocation('${a.id}', 'confirmed')">Confirm</button>
-                            <button class="btn btn-secondary btn-sm" onclick="respondToAllocation('${a.id}', 'declined')">Decline</button>
+                            <button class="btn btn-secondary btn-sm" onclick="showDeclineModal('${a.id}')">Decline</button>
                         </div>
                     ` : ''}
                     ${canMarkDelivered ? `
@@ -258,6 +262,86 @@ function renderTrainerAllocations() {
             </div>
         `;
     }).join('');
+}
+
+// Show decline modal with reason field
+function showDeclineModal(allocId) {
+    const modal = document.createElement('div');
+    modal.id = 'decline-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>Decline Training</h3>
+            <p>Please provide a reason for declining this training assignment:</p>
+            <div class="form-group" style="margin: 1rem 0;">
+                <textarea id="decline-reason" rows="3" placeholder="e.g., Prior commitment, travel issues, not qualified for this course..." class="form-textarea"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('decline-modal').remove()">Cancel</button>
+                <button class="btn btn-danger" onclick="submitDecline('${allocId}')">Decline Training</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function submitDecline(allocId) {
+    const reason = document.getElementById('decline-reason')?.value?.trim();
+    
+    if (!reason) {
+        showToast('Please provide a reason for declining', 'error');
+        return;
+    }
+    
+    try {
+        await db.collection('allocations').doc(allocId).update({
+            status: 'declined',
+            declineReason: reason,
+            respondedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        const alloc = state.trainerAllocations.find(a => a.id === allocId);
+        if (alloc) {
+            alloc.status = 'declined';
+            alloc.declineReason = reason;
+        }
+        
+        document.getElementById('decline-modal')?.remove();
+        showToast('Training declined', 'success');
+        renderTrainerAllocations();
+        renderTrainerCalendar();
+    } catch (error) {
+        showToast('Error updating', 'error');
+    }
+}
+
+window.showDeclineModal = showDeclineModal;
+window.submitDecline = submitDecline;
+
+// Check for pending allocations and show notification
+function checkPendingAllocations() {
+    const pending = state.trainerAllocations.filter(a => a.status === 'pending');
+    
+    if (pending.length > 0) {
+        showPendingNotification(pending.length);
+    }
+}
+
+function showPendingNotification(count) {
+    const modal = document.createElement('div');
+    modal.id = 'pending-notification-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <h3>📋 New Training Assignment${count > 1 ? 's' : ''}</h3>
+            <p>You have <strong>${count}</strong> training assignment${count > 1 ? 's' : ''} pending your confirmation.</p>
+            <p style="color: var(--tnh-steel); font-size: 0.9rem; margin-top: 0.5rem;">Please review and confirm or decline each assignment in your Allocated Trainings section below.</p>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="document.getElementById('pending-notification-modal').remove(); document.getElementById('trainer-allocations').scrollIntoView({behavior: 'smooth'});">View Assignments</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
 
 async function markTrainingDelivered(allocId) {

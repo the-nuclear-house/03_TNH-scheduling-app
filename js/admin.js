@@ -247,7 +247,9 @@ function renderAdminViewHTML() {
                 <div class="legend-item"><span class="legend-dot available"></span> Available</div>
                 <div class="legend-item"><span class="legend-dot unavailable-confirmed"></span> Unavailable</div>
                 <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
-                <div class="legend-item"><span class="legend-dot allocated"></span> 📍 In Person / 💻 Remote</div>
+                <div class="legend-item"><span class="legend-dot allocated-pending"></span> ⏳ Pending</div>
+                <div class="legend-item"><span class="legend-dot allocated-confirmed"></span> 📍💻 Confirmed</div>
+                <div class="legend-item"><span class="legend-dot allocated-declined"></span> ❌ Declined</div>
                 <div class="legend-item"><span class="legend-dot delivered"></span> ✅ Delivered</div>
             </div>
         </div>
@@ -391,9 +393,16 @@ function renderOverviewGrid() {
                 if (alloc.delivered) {
                     cls += ' delivered';
                     content = '✅';
-                } else {
-                    cls += ' allocated';
+                } else if (alloc.status === 'confirmed') {
+                    cls += ' allocated-confirmed';
                     content = alloc.trainingType === 'remote' ? '💻' : '📍';
+                } else if (alloc.status === 'declined') {
+                    cls += ' allocated-declined';
+                    content = '❌';
+                } else {
+                    // pending
+                    cls += ' allocated-pending';
+                    content = '⏳';
                 }
                 cls += ' clickable';
                 clickHandler = `onclick="showAllocationDetails('${alloc.id}')"`;
@@ -940,6 +949,9 @@ function showAllocationDetails(allocId) {
     const trainer = state.trainers.find(t => t.id === alloc.trainerId);
     const isFreelancer = trainer?.employmentType === 'freelancer';
     
+    const statusClass = alloc.delivered ? 'delivered' : alloc.status;
+    const statusText = alloc.delivered ? 'Delivered' : alloc.status.charAt(0).toUpperCase() + alloc.status.slice(1);
+    
     const content = document.getElementById('allocation-details-content');
     content.innerHTML = `
         <div class="details-grid">
@@ -949,8 +961,9 @@ function showAllocationDetails(allocId) {
             <div class="detail-row"><strong>Type:</strong> ${alloc.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</div>
             ${alloc.location ? `<div class="detail-row"><strong>Location:</strong> ${alloc.location}</div>` : ''}
             ${alloc.client ? `<div class="detail-row"><strong>Client:</strong> ${alloc.client}</div>` : ''}
-            <div class="detail-row"><strong>Status:</strong> <span class="status-badge ${alloc.status}">${alloc.status}</span></div>
-            <div class="detail-row"><strong>Delivered:</strong> ${alloc.delivered ? '✅ Yes' : '⏳ Not yet'}</div>
+            <div class="detail-row"><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></div>
+            ${alloc.status === 'declined' && alloc.declineReason ? `<div class="detail-row decline-reason-display"><strong>Decline Reason:</strong> ${alloc.declineReason}</div>` : ''}
+            ${alloc.delivered ? `<div class="detail-row"><strong>Delivered:</strong> ✅ Yes</div>` : ''}
             ${isFreelancer && alloc.trainerRate ? `<div class="detail-row"><strong>Rate:</strong> £${alloc.trainerRate}/day (Total: £${alloc.trainerRate * sortedDates.length})</div>` : ''}
             ${alloc.notes ? `<div class="detail-row"><strong>Notes:</strong> ${alloc.notes}</div>` : ''}
         </div>
@@ -958,11 +971,18 @@ function showAllocationDetails(allocId) {
     
     const allIds = groupAllocs.map(a => a.id).join(',');
     const actions = document.getElementById('allocation-details-actions');
-    actions.innerHTML = `
-        <button class="btn btn-secondary" onclick="closeAllocationDetailsModal()">Close</button>
-        ${!alloc.delivered ? `<button class="btn btn-success" onclick="markAsDelivered('${allIds}')">Mark Delivered</button>` : ''}
-        <button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Cancel Training</button>
-    `;
+    
+    let actionButtons = `<button class="btn btn-secondary" onclick="closeAllocationDetailsModal()">Close</button>`;
+    
+    if (alloc.status === 'declined') {
+        // Offer to re-allocate or cancel
+        actionButtons += `<button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Remove</button>`;
+    } else if (!alloc.delivered) {
+        actionButtons += `<button class="btn btn-success" onclick="markAsDelivered('${allIds}')">Mark Delivered</button>`;
+        actionButtons += `<button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Cancel Training</button>`;
+    }
+    
+    actions.innerHTML = actionButtons;
     
     document.getElementById('allocation-details-modal').classList.remove('hidden');
 }

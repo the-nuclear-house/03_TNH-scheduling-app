@@ -115,8 +115,11 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .grid-cell.unavailable-confirmed { background: #ef4444; color: white; font-weight: 600; }
 .grid-cell.not-set { background: var(--tnh-light-grey); color: var(--tnh-medium-grey); }
 .grid-cell.allocated { background: var(--tnh-blue); color: white; font-weight: 600; }
+.grid-cell.allocated-pending { background: var(--tnh-amber); color: var(--tnh-charcoal); font-weight: 600; }
+.grid-cell.allocated-confirmed { background: var(--tnh-blue); color: white; font-weight: 600; }
+.grid-cell.allocated-declined { background: #f87171; color: white; font-weight: 600; }
 .grid-cell.delivered { background: #10b981; color: white; font-weight: 600; }
-.grid-cell.selected { background: var(--tnh-amber); color: var(--tnh-charcoal); font-weight: 600; }
+.grid-cell.selected { background: #fbbf24; color: var(--tnh-charcoal); font-weight: 600; }
 .grid-cell.clickable { cursor: pointer; }
 .grid-cell.clickable:hover { opacity: 0.8; transform: scale(1.05); }
 
@@ -143,7 +146,17 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 /* Legend Dots */
 .legend-dot.not-set { background: var(--tnh-light-grey); border: 1px dashed var(--tnh-medium-grey); }
 .legend-dot.unavailable-confirmed { background: #ef4444; }
+.legend-dot.allocated-pending { background: var(--tnh-amber); }
+.legend-dot.allocated-confirmed { background: var(--tnh-blue); }
+.legend-dot.allocated-declined { background: #f87171; }
 .legend-dot.delivered { background: #10b981; }
+
+/* Decline Reason */
+.decline-reason { margin-top: 0.5rem; padding: 0.5rem; background: rgba(239, 68, 68, 0.1); border-radius: 4px; font-size: 0.85rem; color: #b91c1c; }
+.decline-reason-display { background: rgba(239, 68, 68, 0.1); padding: 0.5rem; border-radius: 4px; color: #b91c1c; }
+
+/* Status badge for declined */
+.status-badge.declined { background: rgba(239, 68, 68, 0.2); color: #b91c1c; }
 
 /* Details Grid */
 .details-grid { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
