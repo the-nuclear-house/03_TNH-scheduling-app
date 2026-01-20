@@ -2,12 +2,12 @@
    Replace placeholder values with your actual credentials */
 
 const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyBjQhx6zJ7IV80uDT778yBzk977YI1d9Zk",
+    authDomain: "tnh-scheduling.firebaseapp.com",
+    projectId: "tnh-scheduling",
+    storageBucket: "tnh-scheduling.firebasestorage.app",
+    messagingSenderId: "605173901124",
+    appId: "1:605173901124:web:bda51b625d5f908bad1911"
 };
 
 const emailjsConfig = {
@@ -17,9 +17,9 @@ const emailjsConfig = {
 };
 
 const appConfig = {
-    initialAdminEmail: "your-admin-email@example.com",
+    initialAdminEmail: "login@thenuclearhouse.co.uk",
     companyName: "The Nuclear House",
-    adminNotificationEmail: "admin@thenuclearhouse.com"
+    adminNotificationEmail: "login@thenuclearhouse.co.uk"
 };
 
 // Initialize Firebase
