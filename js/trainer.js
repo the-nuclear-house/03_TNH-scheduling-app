@@ -19,6 +19,8 @@ function initTrainerView() {
 
 function renderTrainerViewHTML() {
     document.getElementById('trainer-view').innerHTML = `
+        <div id="trainer-profile-card"></div>
+        
         <div class="content-header">
             <h2>My Availability</h2>
             <p>Click on dates to toggle your availability. Green means you're available.</p>
@@ -37,6 +39,9 @@ function renderTrainerViewHTML() {
         <h3 style="margin-bottom:1rem;">My Upcoming Trainings</h3>
         <div id="trainer-allocations" class="allocations-list"></div>
     `;
+    
+    // Render profile card
+    renderTrainerProfileCard();
 }
 
 async function loadTrainerData() {

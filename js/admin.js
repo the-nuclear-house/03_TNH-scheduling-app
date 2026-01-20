@@ -115,7 +115,19 @@ function openAllocationModal() {
     document.getElementById('modal-alloc-location').value = '';
     document.getElementById('modal-alloc-client').value = '';
     document.getElementById('modal-alloc-notes').value = '';
+    document.getElementById('modal-alloc-type').value = 'in-person';
+    
+    // Reset type buttons
+    document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector('.type-btn.in-person').classList.add('active');
+    
     document.getElementById('allocation-modal').classList.remove('hidden');
+}
+
+function setTrainingType(type) {
+    document.getElementById('modal-alloc-type').value = type;
+    document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.type-btn.${type}`).classList.add('active');
 }
 
 function closeAllocationModal() {
@@ -127,11 +139,15 @@ async function confirmAllocation() {
     const location = document.getElementById('modal-alloc-location').value;
     const client = document.getElementById('modal-alloc-client').value;
     const notes = document.getElementById('modal-alloc-notes').value;
+    const trainingType = document.getElementById('modal-alloc-type').value;
     
     if (!title) {
         showToast('Please enter a training title', 'error');
         return;
     }
+    
+    // Generate a unique group ID for this multi-day training
+    const groupId = 'grp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
     try {
         // Create allocation for each selected date
@@ -141,6 +157,8 @@ async function confirmAllocation() {
                 trainerName: selectedTrainerName,
                 trainerEmail: selectedTrainerEmail,
                 title, date: dateKey, location, client, notes,
+                trainingType,
+                groupId,
                 status: 'pending',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: state.currentUser.uid
@@ -156,6 +174,8 @@ async function confirmAllocation() {
         showToast('Error allocating training', 'error');
     }
 }
+
+window.setTrainingType = setTrainingType;
 
 window.toggleDateSelection = toggleDateSelection;
 window.closeAllocationModal = closeAllocationModal;
@@ -198,7 +218,8 @@ function renderAdminViewHTML() {
             <div class="legend-bar">
                 <div class="legend-item"><span class="legend-dot available"></span> Available</div>
                 <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
-                <div class="legend-item"><span class="legend-dot allocated"></span> Allocated</div>
+                <div class="legend-item"><span class="legend-dot allocated"></span> In Person</div>
+                <div class="legend-item"><span class="legend-dot allocated-remote"></span> Remote</div>
                 <div class="legend-item"><span class="legend-dot unavailable"></span> Unavailable</div>
             </div>
         </div>
@@ -226,6 +247,14 @@ function renderAdminViewHTML() {
                 <div class="modal-info">
                     <p><strong>Trainer:</strong> <span id="modal-alloc-trainer"></span></p>
                     <p><strong>Dates:</strong> <span id="modal-alloc-dates"></span></p>
+                </div>
+                <div class="form-group">
+                    <label>Training Type</label>
+                    <div class="training-type-toggle">
+                        <button type="button" class="type-btn in-person active" onclick="setTrainingType('in-person')">📍 In Person</button>
+                        <button type="button" class="type-btn remote" onclick="setTrainingType('remote')">💻 Remote</button>
+                    </div>
+                    <input type="hidden" id="modal-alloc-type" value="in-person">
                 </div>
                 <div class="form-group">
                     <label>Training Title *</label>
@@ -315,8 +344,8 @@ function renderOverviewGrid() {
             let clickable = false;
             
             if (alloc) {
-                cls += ' allocated';
-                content = '📋';
+                cls += alloc.trainingType === 'remote' ? ' allocated-remote' : ' allocated';
+                content = alloc.trainingType === 'remote' ? '💻' : '📍';
             } else if (isSelected) {
                 cls += ' selected';
                 content = '✓';
@@ -350,58 +379,330 @@ function renderAllAllocations() {
         return;
     }
     
-    container.innerHTML = state.allocations.map(a => `
-        <div class="allocation-card ${a.status}">
-            <div class="allocation-details">
-                <div class="title">${a.title}</div>
-                <div class="meta">
-                    <span>📅 ${formatDate(new Date(a.date))}</span>
-                    <span>👤 ${a.trainerName}</span>
-                    ${a.location ? `<span>📍 ${a.location}</span>` : ''}
+    // Group allocations by groupId
+    const grouped = {};
+    state.allocations.forEach(a => {
+        const key = a.groupId || a.id; // fallback to id for old allocations without groupId
+        if (!grouped[key]) {
+            grouped[key] = {
+                ...a,
+                dates: [a.date],
+                allIds: [a.id]
+            };
+        } else {
+            grouped[key].dates.push(a.date);
+            grouped[key].allIds.push(a.id);
+        }
+    });
+    
+    // Convert to array and sort by first date
+    const trainings = Object.values(grouped).sort((a, b) => {
+        const dateA = Math.min(...a.dates.map(d => new Date(d).getTime()));
+        const dateB = Math.min(...b.dates.map(d => new Date(d).getTime()));
+        return dateB - dateA;
+    });
+    
+    container.innerHTML = trainings.map(t => {
+        const sortedDates = t.dates.sort();
+        const startDate = new Date(sortedDates[0]);
+        const endDate = new Date(sortedDates[sortedDates.length - 1]);
+        const dateDisplay = sortedDates.length === 1 
+            ? formatDate(startDate)
+            : `${formatDateShort(startDate)} - ${formatDateShort(endDate)} (${sortedDates.length} days)`;
+        
+        const typeIcon = t.trainingType === 'remote' ? '💻' : '📍';
+        const typeLabel = t.trainingType === 'remote' ? 'Remote' : 'In Person';
+        
+        return `
+            <div class="allocation-card ${t.status}">
+                <div class="allocation-details">
+                    <div class="title">${t.title}</div>
+                    <div class="meta">
+                        <span>📅 ${dateDisplay}</span>
+                        <span>👤 ${t.trainerName}</span>
+                        <span>${typeIcon} ${typeLabel}</span>
+                        ${t.location ? `<span>📍 ${t.location}</span>` : ''}
+                        ${t.client ? `<span>🏢 ${t.client}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;">
+                    <span class="status-badge ${t.status}">${t.status}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="cancelTraining('${t.allIds.join(',')}')">Cancel</button>
                 </div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.5rem;">
-                <span class="status-badge ${a.status}">${a.status}</span>
-                <button class="btn btn-secondary btn-sm" onclick="cancelAllocation('${a.id}')">Cancel</button>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-async function cancelAllocation(id) {
-    const confirmed = await showModal('Cancel Allocation', 'Are you sure?');
+async function cancelTraining(idsString) {
+    const ids = idsString.split(',');
+    const confirmed = await showModal('Cancel Training', `This will cancel ${ids.length} day(s). Are you sure?`);
     if (!confirmed) return;
     
     try {
-        await db.collection('allocations').doc(id).delete();
-        showToast('Cancelled', 'success');
+        for (const id of ids) {
+            await db.collection('allocations').doc(id).delete();
+        }
+        showToast('Training cancelled', 'success');
         loadAdminData();
     } catch (e) {
-        showToast('Error', 'error');
+        showToast('Error cancelling', 'error');
     }
 }
 
+window.cancelTraining = cancelTraining;
+
 function renderTrainersManagement() {
+    const container = document.getElementById('trainers-management');
+    if (!container) return;
+    
     if (!state.trainers.length) {
-        document.getElementById('trainers-management').innerHTML = '<p class="no-data">No trainers.</p>';
+        container.innerHTML = '<p class="no-data">No trainers registered.</p>';
         return;
     }
     
-    document.getElementById('trainers-management').innerHTML = state.trainers.map(t => `
-        <div class="trainer-card">
-            <div class="trainer-info">
-                <span class="name">${t.name}${t.isAdmin ? '<span class="admin-badge">Admin</span>' : ''}</span>
-                <span class="email">${t.email}</span>
-                ${t.phone ? `<span class="phone">${t.phone}</span>` : ''}
+    const membershipLabels = {
+        'none': 'No Membership',
+        'affiliate': 'Affiliate',
+        'tech': 'Tech IOSH',
+        'grad': 'Grad IOSH',
+        'cert': 'Cert IOSH',
+        'cmiosh': 'CMIOSH'
+    };
+    
+    const qualLabels = {
+        'iosh-train-trainer': 'Train the Trainer',
+        'aet-ptlls': 'AET/PTLLS',
+        'nebosh-gc': 'NEBOSH GC',
+        'nebosh-diploma': 'NEBOSH Diploma',
+        'iosh-level3': 'IOSH L3',
+        'iosh-level6': 'IOSH L6'
+    };
+    
+    container.innerHTML = state.trainers.map(t => {
+        // Count allocations for this trainer
+        const trainerAllocations = state.allocations.filter(a => a.trainerId === t.id);
+        const completedTrainings = trainerAllocations.filter(a => a.status === 'confirmed').length;
+        
+        const stars = renderStars(t.adminRating || 0);
+        
+        return `
+            <div class="trainer-profile-row">
+                <div class="profile-photo">
+                    ${t.photoURL ? `<img src="${t.photoURL}" alt="${t.name}">` : `<div class="photo-placeholder-large">${t.name?.charAt(0) || '?'}</div>`}
+                </div>
+                <div class="trainer-details">
+                    <h4>
+                        ${t.name}
+                        ${t.isAdmin ? '<span class="badge badge-warning">Admin</span>' : ''}
+                        ${t.ioshApprovedTrainer ? '<span class="badge badge-success">IOSH Approved</span>' : ''}
+                    </h4>
+                    <div class="trainer-meta">
+                        ${t.email} ${t.phone ? '• ' + t.phone : ''}
+                    </div>
+                    <div class="trainer-meta">
+                        ${membershipLabels[t.ioshMembership] || 'Not specified'} 
+                        ${t.trainingYearsExperience ? `• ${t.trainingYearsExperience} yrs training exp` : ''}
+                        ${t.hsSectorYears ? `• ${t.hsSectorYears} yrs in H&S` : ''}
+                    </div>
+                    ${t.qualifications?.length ? `
+                        <div class="qualifications-tags">
+                            ${t.qualifications.map(q => `<span class="qual-tag">${qualLabels[q] || q}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="trainer-stats">
+                    <div class="trainer-stat">
+                        <div class="stat-value">${completedTrainings}</div>
+                        <div class="stat-label">Trainings</div>
+                    </div>
+                    <div class="trainer-stat">
+                        <div class="star-rating">${stars}</div>
+                        <div class="stat-label">Rating</div>
+                    </div>
+                </div>
+                <div class="trainer-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="viewTrainerProfile('${t.id}')">View</button>
+                    <button class="btn btn-secondary btn-sm" onclick="editTrainerAdmin('${t.id}')">Edit</button>
+                    ${!t.isAdmin && t.id !== state.currentUser.uid ? `
+                        <button class="btn btn-secondary btn-sm" onclick="toggleAdmin('${t.id}', true)">Make Admin</button>
+                    ` : ''}
+                    ${t.isAdmin && t.id !== state.currentUser.uid ? `
+                        <button class="btn btn-secondary btn-sm" onclick="toggleAdmin('${t.id}', false)">Remove Admin</button>
+                    ` : ''}
+                </div>
             </div>
-            ${t.id !== state.currentUser.uid ? `
-                <button class="btn btn-secondary btn-sm" onclick="toggleAdmin('${t.id}', ${!t.isAdmin})">
-                    ${t.isAdmin ? 'Remove Admin' : 'Make Admin'}
-                </button>
-            ` : ''}
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
+function renderStars(rating) {
+    let html = '';
+    for (let i = 1; i <= 5; i++) {
+        html += `<span class="star ${i <= rating ? 'filled' : ''}">★</span>`;
+    }
+    return html;
+}
+
+function viewTrainerProfile(trainerId) {
+    const trainer = state.trainers.find(t => t.id === trainerId);
+    if (!trainer) return;
+    
+    const membershipLabels = {
+        'none': 'No IOSH Membership',
+        'affiliate': 'Affiliate / Student',
+        'tech': 'Tech IOSH (Technical Member)',
+        'grad': 'Grad IOSH (Graduate Member)',
+        'cert': 'Cert IOSH (Certified Member)',
+        'cmiosh': 'CMIOSH (Chartered Member)'
+    };
+    
+    const courseLabels = {
+        'managing-safely': 'IOSH Managing Safely',
+        'working-safely': 'IOSH Working Safely',
+        'managing-safely-refresher': 'IOSH Managing Safely Refresher',
+        'leading-safely': 'IOSH Leading Safely'
+    };
+    
+    const trainerAllocations = state.allocations.filter(a => a.trainerId === trainerId);
+    
+    const modal = document.createElement('div');
+    modal.id = 'view-trainer-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content modal-profile">
+            <div class="modal-header-row">
+                <h2>Trainer Profile</h2>
+                <button class="btn btn-icon" onclick="document.getElementById('view-trainer-modal').remove()">✕</button>
+            </div>
+            
+            <div class="photo-upload-section">
+                <div class="photo-preview">
+                    ${trainer.photoURL ? `<img src="${trainer.photoURL}" alt="${trainer.name}">` : `<span class="photo-placeholder">${trainer.name?.charAt(0) || '?'}</span>`}
+                </div>
+                <div>
+                    <h3 style="margin:0">${trainer.name}</h3>
+                    <p style="margin:0.25rem 0;color:var(--tnh-steel)">${trainer.email}</p>
+                    ${trainer.phone ? `<p style="margin:0;color:var(--tnh-steel)">${trainer.phone}</p>` : ''}
+                </div>
+            </div>
+            
+            <div style="display:grid;gap:1rem;">
+                <div>
+                    <strong>IOSH Membership:</strong> ${membershipLabels[trainer.ioshMembership] || 'Not specified'}
+                </div>
+                <div>
+                    <strong>IOSH Approved Trainer:</strong> ${trainer.ioshApprovedTrainer ? 'Yes ✓' : 'No'}
+                </div>
+                <div>
+                    <strong>Training Experience:</strong> ${trainer.trainingYearsExperience || 0} years
+                </div>
+                <div>
+                    <strong>H&S Sector Experience:</strong> ${trainer.hsSectorYears || 0} years
+                </div>
+                <div>
+                    <strong>Courses Can Deliver:</strong><br>
+                    ${trainer.coursesCanDeliver?.map(c => courseLabels[c] || c).join(', ') || 'None specified'}
+                    ${trainer.otherCourses?.length ? '<br>' + trainer.otherCourses.join(', ') : ''}
+                </div>
+                ${trainer.bio ? `<div><strong>Bio:</strong><br>${trainer.bio}</div>` : ''}
+                <div>
+                    <strong>Trainings Completed:</strong> ${trainerAllocations.filter(a => a.status === 'confirmed').length}
+                </div>
+                <div>
+                    <strong>Admin Rating:</strong> 
+                    <span class="star-rating">${renderStars(trainer.adminRating || 0)}</span>
+                </div>
+                ${trainer.adminNotes ? `<div><strong>Admin Notes:</strong><br>${trainer.adminNotes}</div>` : ''}
+                ${trainer.dayRate ? `<div><strong>Day Rate:</strong> £${trainer.dayRate}</div>` : ''}
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('view-trainer-modal').remove()">Close</button>
+                <button class="btn btn-primary" onclick="document.getElementById('view-trainer-modal').remove(); editTrainerAdmin('${trainerId}')">Edit</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function editTrainerAdmin(trainerId) {
+    const trainer = state.trainers.find(t => t.id === trainerId);
+    if (!trainer) return;
+    
+    const modal = document.createElement('div');
+    modal.id = 'edit-trainer-admin-modal';
+    modal.className = 'modal';
+    modal.innerHTML = `
+        <div class="modal-content modal-profile">
+            <div class="modal-header-row">
+                <h2>Edit Trainer (Admin)</h2>
+                <button class="btn btn-icon" onclick="document.getElementById('edit-trainer-admin-modal').remove()">✕</button>
+            </div>
+            
+            <p style="color:var(--tnh-steel);margin-bottom:1rem;">Edit admin-only fields for ${trainer.name}</p>
+            
+            <div class="form-group">
+                <label>Admin Rating</label>
+                <div class="star-rating-input" id="admin-rating-input">
+                    ${[1,2,3,4,5].map(i => `<span class="star ${i <= (trainer.adminRating || 0) ? 'active' : ''}" data-rating="${i}" onclick="setAdminRating(${i})">★</span>`).join('')}
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Day Rate (£)</label>
+                <input type="number" id="admin-day-rate" value="${trainer.dayRate || ''}" placeholder="e.g., 350">
+            </div>
+            
+            <div class="form-group">
+                <label>Admin Notes</label>
+                <textarea id="admin-notes" rows="3" placeholder="Private notes about this trainer...">${trainer.adminNotes || ''}</textarea>
+            </div>
+            
+            <input type="hidden" id="admin-rating-value" value="${trainer.adminRating || 0}">
+            <input type="hidden" id="edit-trainer-id" value="${trainerId}">
+            
+            <div class="form-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('edit-trainer-admin-modal').remove()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTrainerAdminEdits()">Save</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+function setAdminRating(rating) {
+    document.getElementById('admin-rating-value').value = rating;
+    document.querySelectorAll('#admin-rating-input .star').forEach((star, idx) => {
+        star.classList.toggle('active', idx < rating);
+    });
+}
+
+async function saveTrainerAdminEdits() {
+    const trainerId = document.getElementById('edit-trainer-id').value;
+    const rating = parseInt(document.getElementById('admin-rating-value').value) || 0;
+    const dayRate = parseInt(document.getElementById('admin-day-rate').value) || null;
+    const notes = document.getElementById('admin-notes').value;
+    
+    try {
+        await db.collection('users').doc(trainerId).update({
+            adminRating: rating,
+            dayRate: dayRate,
+            adminNotes: notes
+        });
+        
+        document.getElementById('edit-trainer-admin-modal').remove();
+        showToast('Trainer updated', 'success');
+        loadAdminData();
+    } catch (error) {
+        showToast('Error updating trainer', 'error');
+    }
+}
+
+window.viewTrainerProfile = viewTrainerProfile;
+window.editTrainerAdmin = editTrainerAdmin;
+window.setAdminRating = setAdminRating;
+window.saveTrainerAdminEdits = saveTrainerAdminEdits;
 
 async function toggleAdmin(userId, makeAdmin) {
     const confirmed = await showModal('Confirm', makeAdmin ? 'Make this user an admin?' : 'Remove admin access?');
@@ -417,8 +718,9 @@ async function toggleAdmin(userId, makeAdmin) {
 }
 
 // Make functions global
-window.cancelAllocation = cancelAllocation;
 window.toggleAdmin = toggleAdmin;
 window.toggleDateSelection = toggleDateSelection;
 window.closeAllocationModal = closeAllocationModal;
 window.confirmAllocation = confirmAllocation;
+window.setTrainingType = setTrainingType;
+window.cancelTraining = cancelTraining;

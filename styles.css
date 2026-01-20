@@ -134,9 +134,26 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .legend-dot.selected { background: var(--tnh-amber); }
 
 /* Modal Large */
-.modal-large { max-width: 500px; }
+.modal-large { max-width: 500px; width: 90%; }
 .modal-info { background: var(--tnh-white); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
 .modal-info p { margin: 0.25rem 0; color: var(--tnh-charcoal); }
+.modal-content .form-group { margin-bottom: 1rem; }
+.modal-content .form-group input,
+.modal-content .form-group textarea,
+.modal-content .form-group select { width: 100%; box-sizing: border-box; }
+.modal-content .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 500px) { .modal-content .form-row { grid-template-columns: 1fr; } }
+
+/* Training Type Toggle */
+.training-type-toggle { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.type-btn { flex: 1; padding: 0.75rem; border: 2px solid var(--tnh-light-grey); border-radius: 8px; background: white; font-family: inherit; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 150ms ease; }
+.type-btn:hover { border-color: var(--tnh-medium-grey); }
+.type-btn.active.in-person { border-color: var(--tnh-blue); background: rgba(0,176,240,0.1); color: var(--tnh-blue); }
+.type-btn.active.remote { border-color: #8b5cf6; background: rgba(139,92,246,0.1); color: #8b5cf6; }
+
+/* Grid cell for remote allocations */
+.grid-cell.allocated-remote { background: #8b5cf6; color: white; font-weight: 600; }
+.legend-dot.allocated-remote { background: #8b5cf6; }
 
 /* Forms */
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -184,3 +201,69 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
     .header { padding: 1rem; }
     .user-name { display: none; }
 }
+
+/* =====================================================
+   Profile System Styles
+   ===================================================== */
+
+/* Profile Modal */
+.modal-profile { max-width: 600px; width: 95%; max-height: 90vh; overflow-y: auto; }
+.modal-subtitle { color: var(--tnh-steel); margin-bottom: 1.5rem; }
+.modal-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+
+/* Photo Upload */
+.photo-upload-section { display: flex; align-items: center; gap: 1.5rem; margin-bottom: 1.5rem; padding: 1rem; background: var(--tnh-white); border-radius: 8px; }
+.photo-preview { width: 100px; height: 100px; border-radius: 50%; background: var(--tnh-light-grey); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+.photo-placeholder { font-size: 2.5rem; }
+.photo-upload-controls { display: flex; flex-direction: column; gap: 0.5rem; }
+.photo-hint { font-size: 0.75rem; color: var(--tnh-steel); }
+
+/* Form Elements */
+.profile-form { display: flex; flex-direction: column; gap: 1rem; }
+.radio-group, .checkbox-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.radio-label, .checkbox-label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.5rem; border-radius: 4px; transition: background 150ms; }
+.radio-label:hover, .checkbox-label:hover { background: var(--tnh-white); }
+.radio-label input, .checkbox-label input { accent-color: var(--tnh-blue); }
+.form-actions { display: flex; gap: 1rem; justify-content: flex-end; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--tnh-light-grey); }
+.btn-lg { padding: 1rem 2rem; font-size: 1rem; }
+
+/* Profile Card (Trainer View) */
+.profile-card { display: flex; align-items: center; gap: 1.5rem; padding: 1.5rem; background: white; border: 1px solid var(--tnh-light-grey); border-radius: 12px; margin-bottom: 2rem; flex-wrap: wrap; }
+.profile-photo { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: var(--tnh-light-grey); }
+.profile-photo img { width: 100%; height: 100%; object-fit: cover; }
+.photo-placeholder-large { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--tnh-dark-steel); color: white; font-size: 2rem; font-weight: 600; }
+.profile-info { flex: 1; min-width: 200px; }
+.profile-info h3 { margin: 0 0 0.25rem 0; font-size: 1.25rem; }
+.profile-membership { color: var(--tnh-steel); margin: 0 0 0.5rem 0; font-size: 0.9rem; }
+.profile-experience { color: var(--tnh-medium-grey); margin: 0; font-size: 0.875rem; }
+
+/* Badges */
+.badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+.badge-success { background: rgba(146,208,80,0.2); color: #5a8c2a; }
+.badge-info { background: rgba(0,176,240,0.2); color: #0077a3; }
+.badge-warning { background: rgba(244,194,85,0.2); color: #b8860b; }
+
+/* Admin Trainer Cards (enhanced) */
+.trainer-profile-row { display: flex; align-items: center; gap: 1rem; padding: 1rem; background: white; border: 1px solid var(--tnh-light-grey); border-radius: 8px; margin-bottom: 0.75rem; flex-wrap: wrap; }
+.trainer-profile-row .profile-photo { width: 60px; height: 60px; }
+.trainer-profile-row .trainer-details { flex: 1; min-width: 200px; }
+.trainer-profile-row .trainer-details h4 { margin: 0 0 0.25rem 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.trainer-profile-row .trainer-meta { font-size: 0.875rem; color: var(--tnh-steel); }
+.trainer-profile-row .trainer-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.trainer-stat { text-align: center; }
+.trainer-stat .stat-value { font-size: 1.25rem; font-weight: 700; color: var(--tnh-charcoal); }
+.trainer-stat .stat-label { font-size: 0.75rem; color: var(--tnh-steel); }
+.trainer-profile-row .trainer-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Star Rating */
+.star-rating { display: flex; gap: 0.125rem; }
+.star-rating .star { color: var(--tnh-light-grey); font-size: 1rem; }
+.star-rating .star.filled { color: var(--tnh-amber); }
+.star-rating-input { display: flex; gap: 0.25rem; }
+.star-rating-input .star { cursor: pointer; font-size: 1.5rem; color: var(--tnh-light-grey); transition: color 150ms; }
+.star-rating-input .star:hover, .star-rating-input .star.active { color: var(--tnh-amber); }
+
+/* Qualifications Tags */
+.qualifications-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; }
+.qual-tag { background: var(--tnh-white); border: 1px solid var(--tnh-light-grey); padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.7rem; color: var(--tnh-steel); }

@@ -72,6 +72,7 @@ function initAuth() {
             try {
                 await db.collection('users').doc(cred.user.uid).set({
                     name, email, phone, isAdmin,
+                    profileComplete: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 showToast('Account created', 'success');
@@ -161,6 +162,12 @@ function showApp() {
         badge.classList.remove('admin');
         document.getElementById('trainer-view').classList.remove('hidden');
         document.getElementById('admin-view').classList.add('hidden');
-        initTrainerView();
+        
+        // Check if profile is complete
+        if (!state.userProfile?.profileComplete) {
+            showProfileSetupModal();
+        } else {
+            initTrainerView();
+        }
     }
 }
