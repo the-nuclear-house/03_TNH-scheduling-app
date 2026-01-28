@@ -292,8 +292,19 @@ function renderAdminViewHTML() {
         
         <div id="tab-overview" class="tab-content">
             <div class="content-header">
-                <h2>Trainer Availability</h2>
-                <p>Click on green cells to select dates, then allocate training.</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Trainer Availability</h2>
+                        <p>Click on green cells to select dates, then allocate training.</p>
+                    </div>
+                    <div class="toggle-container">
+                        <span class="toggle-label">Show Archived</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="show-archived-overview" onchange="toggleArchivedTrainers()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
             </div>
             
             <div class="allocation-toolbar">
@@ -335,10 +346,13 @@ function renderAdminViewHTML() {
                         <h2>Manage Trainers</h2>
                         <p>View registered trainers and manage admin access.</p>
                     </div>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                        <input type="checkbox" id="show-archived-trainers" onchange="toggleArchivedTrainers()">
-                        <span>Show Archived</span>
-                    </label>
+                    <div class="toggle-container">
+                        <span class="toggle-label">Show Archived</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="show-archived-trainers" onchange="toggleArchivedTrainers()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
             </div>
             <div id="trainers-management" class="trainers-list"></div>
@@ -440,7 +454,9 @@ async function loadAdminData() {
 function renderOverviewGrid() {
     document.getElementById('admin-month-year').textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
     
-    const showArchived = document.getElementById('show-archived-trainers')?.checked || false;
+    const showArchived = document.getElementById('show-archived-overview')?.checked || 
+                        document.getElementById('show-archived-trainers')?.checked || 
+                        false;
     
     // Filter trainers - exclude admins and archived (unless toggle is on)
     const trainers = state.trainers.filter(t => {
@@ -923,6 +939,17 @@ window.toggleArchivedTrainers = toggleArchivedTrainers;
 window.toggleDateSelection = toggleDateSelection;
 
 function toggleArchivedTrainers() {
+    // Sync both toggles
+    const overviewToggle = document.getElementById('show-archived-overview');
+    const trainersToggle = document.getElementById('show-archived-trainers');
+    
+    if (overviewToggle && trainersToggle) {
+        // Sync the state
+        const isChecked = overviewToggle.checked || trainersToggle.checked;
+        overviewToggle.checked = isChecked;
+        trainersToggle.checked = isChecked;
+    }
+    
     renderTrainersManagement();
     renderOverviewGrid();
 }

@@ -216,10 +216,24 @@ async function saveTrainerProfile() {
 }
 
 function showProfileErrors(errors) {
+    // Blur all inputs to dismiss iOS keyboard
+    document.querySelectorAll('input, textarea, select').forEach(el => el.blur());
+    
     const summary = document.getElementById('profile-error-summary');
     summary.innerHTML = `<strong>Please fix the following:</strong><ul>${errors.map(e => `<li>${e.msg}</li>`).join('')}</ul>`;
     summary.classList.remove('hidden');
-    summary.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Scroll modal content to top to show error
+    const modalContent = document.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
+    
+    // Also scroll summary into view
+    setTimeout(() => {
+        summary.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    
     errors.forEach(e => document.getElementById(e.section)?.classList.add('section-error'));
 }
 
