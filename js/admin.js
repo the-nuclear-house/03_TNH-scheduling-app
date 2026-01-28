@@ -486,6 +486,27 @@ function renderOverviewGrid() {
                     cls += ' allocated-pending';
                     content = '⏳';
                 }
+                
+                // Add grouping borders and day number for multi-day trainings
+                if (alloc.groupId) {
+                    const groupAllocs = state.allocations.filter(a => 
+                        a.groupId === alloc.groupId && a.trainerId === trainer.id
+                    ).sort((a, b) => a.date.localeCompare(b.date));
+                    
+                    if (groupAllocs.length > 1) {
+                        const dayIndex = groupAllocs.findIndex(a => a.date === dateKey);
+                        const isFirst = dayIndex === 0;
+                        const isLast = dayIndex === groupAllocs.length - 1;
+                        
+                        cls += ' multi-day';
+                        if (isFirst) cls += ' multi-day-first';
+                        if (isLast) cls += ' multi-day-last';
+                        
+                        // Add day number as small text
+                        content += `<span class="day-num">D${dayIndex + 1}</span>`;
+                    }
+                }
+                
                 cls += ' clickable';
                 clickHandler = `onclick="showAllocationDetails('${alloc.id}')"`;
             } else if (isSelected) {

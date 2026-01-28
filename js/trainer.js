@@ -226,25 +226,46 @@ function renderTrainerAllocations() {
         return;
     }
     
+    // Group allocations by groupId
+    const grouped = {};
+    upcoming.forEach(a => {
+        const key = a.groupId || a.id;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(a);
+    });
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    container.innerHTML = upcoming.map(a => {
-        const trainingDate = new Date(a.date);
-        const isPast = trainingDate < today;
+    container.innerHTML = Object.values(grouped).map(group => {
+        // Use first allocation for main details (all share same details except date)
+        const a = group[0];
+        const allIds = group.map(g => g.id).join(',');
+        
+        // Calculate date display
+        const sortedDates = group.map(g => g.date).sort();
+        const dateDisplay = sortedDates.length === 1 
+            ? formatDate(new Date(sortedDates[0]))
+            : `${formatDateShort(new Date(sortedDates[0]))} - ${formatDateShort(new Date(sortedDates[sortedDates.length - 1]))} (${sortedDates.length} days)`;
+        
+        const latestDate = new Date(sortedDates[sortedDates.length - 1]);
+        const isPast = latestDate < today;
         const canMarkDelivered = isPast && a.status === 'confirmed' && !a.delivered;
+        
+        // Calculate total rate for multi-day
+        const totalRate = a.trainerRate ? a.trainerRate * sortedDates.length : null;
         
         return `
             <div class="allocation-card trainer-allocation ${a.status} ${a.delivered ? 'delivered' : ''}">
                 <div class="allocation-details">
                     <div class="title">${a.title} ${a.delivered ? '✅' : ''}</div>
                     <div class="meta">
-                        <span>📅 ${formatDate(new Date(a.date))}</span>
+                        <span>📅 ${dateDisplay}</span>
                         <span>${a.trainingType === 'remote' ? '💻 Remote' : '📍 In Person'}</span>
                         ${a.location ? `<span>📍 ${a.location}</span>` : ''}
                         ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
                     </div>
-                    ${a.trainerRate ? `<div class="rate-info">💷 Rate: £${a.trainerRate}/day</div>` : ''}
+                    ${a.trainerRate ? `<div class="rate-info">💷 Rate: £${a.trainerRate}/day${sortedDates.length > 1 ? ` (Total: £${totalRate})` : ''}</div>` : ''}
                     ${a.poNumber ? `<div class="po-info">📄 PO: ${a.poNumber}</div>` : ''}
                     ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
                     ${a.declineReason ? `<div class="decline-reason"><strong>Decline reason:</strong> ${a.declineReason}</div>` : ''}
@@ -253,21 +274,23 @@ function renderTrainerAllocations() {
                     <span class="status-badge ${a.status}">${a.delivered ? 'delivered' : a.status}</span>
                     ${a.status === 'pending' ? `
                         <div class="response-buttons">
-                            <button class="btn btn-success btn-sm" onclick="respondToAllocation('${a.id}', 'confirmed')">Confirm</button>
-                            <button class="btn btn-secondary btn-sm" onclick="showDeclineModal('${a.id}')">Decline</button>
+                            <button class="btn btn-success btn-sm" onclick="respondToAllocation('${allIds}', 'confirmed')">Confirm</button>
+                            <button class="btn btn-secondary btn-sm" onclick="showDeclineModal('${allIds}')">Decline</button>
                         </div>
                     ` : ''}
                     ${canMarkDelivered ? `
-                        <button class="btn btn-primary btn-sm" onclick="markTrainingDelivered('${a.id}')">Mark Delivered</button>
+                        <button class="btn btn-primary btn-sm" onclick="markTrainingDelivered('${allIds}')">Mark Delivered</button>
                     ` : ''}
                 </div>
             </div>
         `;
     }).join('');
 }
+    }).join('');
+}
 
 // Show decline modal with reason field
-function showDeclineModal(allocId) {
+function showDeclineModal(allocIds) {
     const modal = document.createElement('div');
     modal.id = 'decline-modal';
     modal.className = 'modal';
@@ -280,14 +303,14 @@ function showDeclineModal(allocId) {
             </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="document.getElementById('decline-modal').remove()">Cancel</button>
-                <button class="btn btn-danger" onclick="submitDecline('${allocId}')">Decline Training</button>
+                <button class="btn btn-danger" onclick="submitDecline('${allocIds}')">Decline Training</button>
             </div>
         </div>
     `;
     document.body.appendChild(modal);
 }
 
-async function submitDecline(allocId) {
+async function submitDecline(allocIds) {
     const reason = document.getElementById('decline-reason')?.value?.trim();
     
     if (!reason) {
@@ -296,16 +319,21 @@ async function submitDecline(allocId) {
     }
     
     try {
-        await db.collection('allocations').doc(allocId).update({
-            status: 'declined',
-            declineReason: reason,
-            respondedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        const ids = allocIds.split(',');
         
-        const alloc = state.trainerAllocations.find(a => a.id === allocId);
-        if (alloc) {
-            alloc.status = 'declined';
-            alloc.declineReason = reason;
+        // Update all allocations in the group
+        for (const id of ids) {
+            await db.collection('allocations').doc(id).update({
+                status: 'declined',
+                declineReason: reason,
+                respondedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            const alloc = state.trainerAllocations.find(a => a.id === id);
+            if (alloc) {
+                alloc.status = 'declined';
+                alloc.declineReason = reason;
+            }
         }
         
         document.getElementById('decline-modal')?.remove();
@@ -324,8 +352,18 @@ window.submitDecline = submitDecline;
 function checkPendingAllocations() {
     const pending = state.trainerAllocations.filter(a => a.status === 'pending');
     
-    if (pending.length > 0) {
-        showPendingNotification(pending.length);
+    // Group by groupId to count unique trainings
+    const grouped = {};
+    pending.forEach(a => {
+        const key = a.groupId || a.id;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(a);
+    });
+    
+    const uniqueTrainings = Object.keys(grouped).length;
+    
+    if (uniqueTrainings > 0) {
+        showPendingNotification(uniqueTrainings);
     }
 }
 
@@ -346,15 +384,19 @@ function showPendingNotification(count) {
     document.body.appendChild(modal);
 }
 
-async function markTrainingDelivered(allocId) {
+async function markTrainingDelivered(allocIds) {
     try {
-        await db.collection('allocations').doc(allocId).update({
-            delivered: true,
-            deliveredAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        const ids = allocIds.split(',');
         
-        const alloc = state.trainerAllocations.find(a => a.id === allocId);
-        if (alloc) alloc.delivered = true;
+        for (const id of ids) {
+            await db.collection('allocations').doc(id).update({
+                delivered: true,
+                deliveredAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            const alloc = state.trainerAllocations.find(a => a.id === id);
+            if (alloc) alloc.delivered = true;
+        }
         
         showToast('Training marked as delivered', 'success');
         renderTrainerAllocations();
@@ -366,19 +408,25 @@ async function markTrainingDelivered(allocId) {
 
 window.markTrainingDelivered = markTrainingDelivered;
 
-async function respondToAllocation(allocId, response) {
+async function respondToAllocation(allocIds, response) {
     try {
-        await db.collection('allocations').doc(allocId).update({
-            status: response,
-            respondedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        const ids = allocIds.split(',');
         
-        // Update local state
-        const alloc = state.trainerAllocations.find(a => a.id === allocId);
-        if (alloc) alloc.status = response;
+        // Update all allocations in the group
+        for (const id of ids) {
+            await db.collection('allocations').doc(id).update({
+                status: response,
+                respondedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Update local state
+            const alloc = state.trainerAllocations.find(a => a.id === id);
+            if (alloc) alloc.status = response;
+        }
         
         showToast(`Training ${response}`, 'success');
         renderTrainerAllocations();
+        renderTrainerCalendar();
     } catch (error) {
         showToast('Error responding', 'error');
     }
