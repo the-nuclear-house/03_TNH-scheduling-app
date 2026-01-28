@@ -1090,20 +1090,6 @@ async function executeTrainerDeletion() {
         errorEl.classList.remove('hidden');
     }
 }
-        
-    } catch (error) {
-        console.error('Deletion error:', error);
-        
-        if (error.code === 'auth/wrong-password') {
-            errorEl.textContent = 'Incorrect password. Please try again.';
-        } else if (error.code === 'auth/too-many-requests') {
-            errorEl.textContent = 'Too many attempts. Please wait and try again.';
-        } else {
-            errorEl.textContent = 'Error: ' + error.message;
-        }
-        errorEl.classList.remove('hidden');
-    }
-}
 
 function closeDeleteModals() {
     document.getElementById('delete-confirm-modal')?.remove();
