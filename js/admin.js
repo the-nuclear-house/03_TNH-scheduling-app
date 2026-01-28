@@ -375,11 +375,11 @@ function renderAdminViewHTML() {
                     </div>
                 </div>
                 <div class="form-group" id="rate-field-group" style="display:none;">
-                    <label>Trainer Rate (£) <span class="hint">- Freelancer only, not visible to trainer</span></label>
+                    <label>Trainer Rate (£)</label>
                     <input type="number" id="modal-alloc-rate" placeholder="e.g., 350">
                 </div>
                 <div class="form-group" id="po-field-group" style="display:none;">
-                    <label>PO Number <span class="hint">- Purchase Order reference</span></label>
+                    <label>PO Number</label>
                     <input type="text" id="modal-alloc-po" placeholder="e.g., PO-2026-001">
                 </div>
                 <div class="form-group">
