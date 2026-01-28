@@ -939,15 +939,17 @@ window.toggleArchivedTrainers = toggleArchivedTrainers;
 window.toggleDateSelection = toggleDateSelection;
 
 function toggleArchivedTrainers() {
-    // Sync both toggles
     const overviewToggle = document.getElementById('show-archived-overview');
     const trainersToggle = document.getElementById('show-archived-trainers');
     
     if (overviewToggle && trainersToggle) {
-        // Sync the state
-        const isChecked = overviewToggle.checked || trainersToggle.checked;
-        overviewToggle.checked = isChecked;
-        trainersToggle.checked = isChecked;
+        // Sync both to the same state
+        // Use the one that exists in the current tab
+        const activeToggle = !overviewToggle.offsetParent ? trainersToggle : overviewToggle;
+        const targetState = activeToggle.checked;
+        
+        overviewToggle.checked = targetState;
+        trainersToggle.checked = targetState;
     }
     
     renderTrainersManagement();
