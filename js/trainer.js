@@ -52,7 +52,10 @@ function renderTrainerViewHTML() {
             <div class="legend-item"><span class="legend-dot not-set"></span><span>Not Set</span></div>
             <div class="legend-item"><span class="legend-dot available"></span><span>Available</span></div>
             <div class="legend-item"><span class="legend-dot unavailable-confirmed"></span><span>Unavailable</span></div>
-            <div class="legend-item"><span class="legend-dot allocated"></span><span>Allocated</span></div>
+            <div class="legend-item"><span class="legend-dot allocated-pending"></span><span>⏳ Pending</span></div>
+            <div class="legend-item"><span class="legend-dot allocated-confirmed"></span><span>📍💻 Confirmed</span></div>
+            <div class="legend-item"><span class="legend-dot allocated-declined"></span><span>✗ Declined</span></div>
+            <div class="legend-item"><span class="legend-dot delivered"></span><span>✅ Delivered</span></div>
         </div>
         
         <div class="calendar" id="trainer-calendar"></div>
@@ -126,9 +129,15 @@ function renderTrainerCalendar() {
             if (allocation.delivered) {
                 cls += ' delivered';
                 statusIcon = '✅';
-            } else {
-                cls += ' allocated';
+            } else if (allocation.status === 'pending') {
+                cls += ' allocated-pending';
+                statusIcon = '⏳';
+            } else if (allocation.status === 'confirmed') {
+                cls += ' allocated-confirmed';
                 statusIcon = allocation.trainingType === 'remote' ? '💻' : '📍';
+            } else if (allocation.status === 'declined') {
+                cls += ' allocated-declined';
+                statusIcon = '✗';
             }
         } else if (isSelected) {
             cls += ' selected';

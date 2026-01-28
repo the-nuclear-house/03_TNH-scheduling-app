@@ -90,10 +90,13 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .calendar-day:hover { background: var(--tnh-white); }
 .calendar-day.other-month { background: var(--tnh-white); color: var(--tnh-medium-grey); }
 .calendar-day.today { box-shadow: inset 0 0 0 2px var(--tnh-blue); }
-.calendar-day.available { background: rgba(146,208,80,0.2); }
-.calendar-day.available:hover { background: rgba(146,208,80,0.3); }
-.calendar-day.allocated { background: rgba(0,176,240,0.2); }
-.calendar-day.allocated::after { content: '📋'; position: absolute; bottom: 4px; right: 4px; font-size: 0.875rem; }
+.calendar-day.available { background: rgba(146,208,80,0.25); }
+.calendar-day.available:hover { background: rgba(146,208,80,0.35); }
+.calendar-day.unavailable-confirmed { background: rgba(239, 68, 68, 0.25); }
+.calendar-day.allocated-pending { background: rgba(251, 191, 36, 0.4); }
+.calendar-day.allocated-confirmed { background: rgba(0,176,240,0.4); }
+.calendar-day.allocated-declined { background: rgba(239, 68, 68, 0.5); }
+.calendar-day.delivered { background: rgba(16, 185, 129, 0.4); }
 .calendar-day .date-number { font-weight: 600; font-size: 0.875rem; }
 .calendar-day.weekend { background: var(--tnh-white); }
 
@@ -179,10 +182,12 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 
 /* Legend Dots */
 .legend-dot.not-set { background: var(--tnh-light-grey); border: 1px dashed var(--tnh-medium-grey); }
-.legend-dot.unavailable-confirmed { background: #ef4444; }
-.legend-dot.allocated-pending { background: var(--tnh-amber); }
-.legend-dot.allocated-confirmed { background: var(--tnh-blue); }
-.legend-dot.allocated-declined { background: #ef4444; }
+.legend-dot.available { background: rgba(146,208,80,0.7); }
+.legend-dot.unavailable-confirmed { background: rgba(239, 68, 68, 0.7); }
+.legend-dot.allocated-pending { background: rgba(251, 191, 36, 0.7); }
+.legend-dot.allocated-confirmed { background: rgba(0, 176, 240, 0.7); }
+.legend-dot.allocated-declined { background: rgba(239, 68, 68, 0.7); }
+.legend-dot.allocated { background: rgba(0, 176, 240, 0.5); }
 .legend-dot.delivered { background: #10b981; }
 
 /* Decline Reason */
