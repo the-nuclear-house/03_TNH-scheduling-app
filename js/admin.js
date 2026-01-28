@@ -908,6 +908,18 @@ async function sendReminderForAllocation(allocId) {
     const alloc = state.allocations.find(a => a.id === allocId);
     if (!alloc) return;
     
+    // Check if reminder was sent in last 24 hours
+    if (alloc.lastReminderSent) {
+        const lastSent = alloc.lastReminderSent.toDate ? alloc.lastReminderSent.toDate() : new Date(alloc.lastReminderSent);
+        const hoursSinceReminder = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+        
+        if (hoursSinceReminder < 24) {
+            const hoursLeft = Math.ceil(24 - hoursSinceReminder);
+            showToast(`Reminder already sent. Wait ${hoursLeft}h before sending another`, 'error');
+            return;
+        }
+    }
+    
     // Find all allocations in the same group for date range
     const groupAllocs = alloc.groupId 
         ? state.allocations.filter(a => a.groupId === alloc.groupId)
@@ -926,6 +938,26 @@ async function sendReminderForAllocation(allocId) {
         location: alloc.location,
         client: alloc.client
     });
+    
+    // Update all allocations in group with reminder timestamp
+    try {
+        for (const groupAlloc of groupAllocs) {
+            await db.collection('allocations').doc(groupAlloc.id).update({
+                lastReminderSent: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Update local state
+            const localAlloc = state.allocations.find(a => a.id === groupAlloc.id);
+            if (localAlloc) {
+                localAlloc.lastReminderSent = new Date();
+            }
+        }
+        
+        // Refresh the modal to show updated button state
+        showAllocationDetails(allocId);
+    } catch (error) {
+        console.error('Error updating reminder timestamp:', error);
+    }
 }
 window.sendReminderEmail = sendReminderEmail;
 
@@ -1108,7 +1140,23 @@ function showAllocationDetails(allocId) {
     let actionButtons = `<button class="btn btn-secondary" onclick="closeAllocationDetailsModal()">Close</button>`;
     
     if (alloc.status === 'pending') {
-        actionButtons += `<button class="btn btn-primary" onclick="sendReminderForAllocation('${alloc.id}')">📧 Send Reminder</button>`;
+        // Check if reminder was sent in last 24 hours
+        let reminderButton = '';
+        if (alloc.lastReminderSent) {
+            const lastSent = alloc.lastReminderSent.toDate ? alloc.lastReminderSent.toDate() : new Date(alloc.lastReminderSent);
+            const hoursSinceReminder = (Date.now() - lastSent.getTime()) / (1000 * 60 * 60);
+            
+            if (hoursSinceReminder < 24) {
+                const hoursLeft = Math.ceil(24 - hoursSinceReminder);
+                reminderButton = `<button class="btn btn-primary" disabled style="opacity: 0.5; cursor: not-allowed;">✓ Reminder Sent (wait ${hoursLeft}h)</button>`;
+            } else {
+                reminderButton = `<button class="btn btn-primary" onclick="sendReminderForAllocation('${alloc.id}')">📧 Send Reminder</button>`;
+            }
+        } else {
+            reminderButton = `<button class="btn btn-primary" onclick="sendReminderForAllocation('${alloc.id}')">📧 Send Reminder</button>`;
+        }
+        
+        actionButtons += reminderButton;
         actionButtons += `<button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Cancel Training</button>`;
     } else if (alloc.status === 'declined') {
         // Offer to remove
