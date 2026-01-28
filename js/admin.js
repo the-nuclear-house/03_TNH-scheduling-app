@@ -782,8 +782,7 @@ function viewTrainerProfile(trainerId) {
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content modal-profile">
-            <div class="modal-header-row">
-                <h2>Trainer Profile</h2>
+            <div class="modal-header-row" style="justify-content: flex-end;">
                 <button class="btn btn-icon" onclick="document.getElementById('view-trainer-modal').remove()">✕</button>
             </div>
             
@@ -792,14 +791,21 @@ function viewTrainerProfile(trainerId) {
                     ${trainer.photoURL ? `<img src="${trainer.photoURL}" alt="${trainer.name}">` : `<span class="photo-placeholder">${trainer.name?.charAt(0) || '?'}</span>`}
                 </div>
                 <div>
-                    <h3 style="margin:0">${trainer.name}</h3>
-                    <p style="margin:0.25rem 0;color:var(--tnh-steel)">${trainer.email}</p>
-                    ${trainer.phone ? `<p style="margin:0;color:var(--tnh-steel)">${trainer.phone}</p>` : ''}
-                    <span class="badge ${trainer.employmentType === 'freelancer' ? 'badge-warning' : 'badge-info'}">${trainer.employmentType === 'freelancer' ? 'Freelancer' : 'TNH Employee'}</span>
+                    <h2 style="margin:0">${trainer.name}</h2>
+                    <p style="margin:0.5rem 0;color:var(--tnh-steel);font-size:0.9375rem;">${trainer.email}</p>
+                    ${trainer.phone ? `<p style="margin:0 0 0.5rem 0;color:var(--tnh-steel);font-size:0.9375rem;">${trainer.phone}</p>` : ''}
+                    <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                        ${trainer.employmentType === 'freelancer' ? '<span class="badge" style="background:#f59e0b;">Freelancer</span>' : '<span class="badge badge-info">TNH Employee</span>'}
+                        ${trainer.isAdmin ? '<span class="badge badge-warning">Admin</span>' : ''}
+                        ${trainer.ioshApprovedTrainer ? '<span class="badge badge-success">IOSH Approved</span>' : ''}
+                    </div>
                 </div>
             </div>
             
-            <div style="display:grid;gap:1rem;">
+            <div style="display:grid;gap:1rem;margin-top:1.5rem;">
+                <div>
+                    <strong>Employment Type:</strong> ${trainer.employmentType === 'freelancer' ? 'Freelancer' : 'TNH Employee'}
+                </div>
                 <div>
                     <strong>IOSH Membership:</strong> ${membershipLabels[trainer.ioshMembership] || 'Not specified'}
                 </div>
