@@ -380,7 +380,7 @@ function renderAdminViewHTML() {
                 </div>
                 <div class="form-group" id="po-field-group" style="display:none;">
                     <label>PO Number</label>
-                    <input type="text" id="modal-alloc-po" placeholder="e.g., PO-2026-001">
+                    <input type="text" id="modal-alloc-po" placeholder="e.g., 2026-847362">
                 </div>
                 <div class="form-group">
                     <label>Notes</label>
@@ -1066,13 +1066,29 @@ async function executeTrainerDeletion() {
             await photoRef.delete();
         } catch (e) {
             // Photo might not exist, that's fine
+            console.log('No profile photo to delete');
         }
         
         showToast(`${trainerToDelete.name} has been deleted`, 'success');
         closeDeleteModals();
+        trainerToDelete = null;
         
         // Refresh the trainer list
-        loadAdminData();
+        await loadAdminData();
+    } catch (error) {
+        console.error('Deletion error:', error);
+        
+        if (error.code === 'auth/wrong-password') {
+            errorEl.textContent = 'Incorrect password. Please try again.';
+        } else if (error.code === 'auth/too-many-requests') {
+            errorEl.textContent = 'Too many attempts. Please wait and try again.';
+        } else {
+            errorEl.textContent = 'Error deleting trainer: ' + error.message;
+        }
+        
+        errorEl.classList.remove('hidden');
+    }
+}
         
     } catch (error) {
         console.error('Deletion error:', error);

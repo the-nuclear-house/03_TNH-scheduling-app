@@ -1,13 +1,12 @@
-/* TNH Scheduling - Configuration
-   Replace placeholder values with your actual credentials */
+/* TNH Scheduling - Configuration */
 
 const firebaseConfig = {
-    apiKey: "AIzaSyDvoW0C-CLMkYRvFV-jdWKhny9wyEi5Y7A",
-    authDomain: "tnh-scheduling-496b1.firebaseapp.com",
-    projectId: "tnh-scheduling-496b1",
-    storageBucket: "tnh-scheduling-496b1.firebasestorage.app",
-    messagingSenderId: "872521888849",
-    appId: "1:872521888849:web:2086a030296cc4fe457470"
+    apiKey: "AIzaSyBjQhx6zJ7IV80uDT778yBzk977YI1d9Zk",
+    authDomain: "tnh-scheduling.firebaseapp.com",
+    projectId: "tnh-scheduling",
+    storageBucket: "tnh-scheduling.firebasestorage.app",
+    messagingSenderId: "605173901124",
+    appId: "1:605173901124:web:bda51b625d5f908bad1911"
 };
 
 const emailjsConfig = {

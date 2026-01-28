@@ -130,30 +130,42 @@ async function handlePhotoUpload(e) {
         return;
     }
     
+    // Show preview immediately
     const reader = new FileReader();
     reader.onload = (event) => {
         const preview = document.getElementById('photo-preview') || document.getElementById('edit-photo-preview');
-        if (preview) preview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
+        if (preview) {
+            preview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
+        }
     };
     reader.readAsDataURL(file);
     
+    // Upload to Firebase Storage
     try {
-        if (firebase.storage) {
-            const ref = firebase.storage().ref().child(`profile-photos/${state.currentUser.uid}`);
-            showToast('Uploading...', 'info');
-            await ref.put(file);
-            uploadedPhotoURL = await ref.getDownloadURL();
-            showToast('Photo uploaded', 'success');
-        } else {
-            throw new Error('No storage');
+        if (!firebase.storage) {
+            throw new Error('Firebase Storage not initialized');
         }
+        
+        const storageRef = firebase.storage().ref();
+        const photoRef = storageRef.child(`profile-photos/${state.currentUser.uid}`);
+        
+        showToast('Uploading photo...', 'info');
+        
+        await photoRef.put(file);
+        uploadedPhotoURL = await photoRef.getDownloadURL();
+        
+        showToast('Photo uploaded successfully', 'success');
     } catch (err) {
+        console.error('Photo upload error:', err);
+        
+        // Fallback to base64
         uploadedPhotoURL = await new Promise(r => {
             const fr = new FileReader();
             fr.onload = e => r(e.target.result);
             fr.readAsDataURL(file);
         });
-        showToast('Photo ready', 'success');
+        
+        showToast('Photo ready (saved locally)', 'success');
     }
 }
 
