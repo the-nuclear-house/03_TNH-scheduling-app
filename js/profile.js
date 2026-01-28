@@ -1,6 +1,7 @@
 /* TNH Scheduling - Trainer Profile System */
 
 let uploadedPhotoURL = null;
+let isUploadingPhoto = false;
 
 function showProfileSetupModal() {
     const modal = document.createElement('div');
@@ -130,6 +131,14 @@ async function handlePhotoUpload(e) {
         return;
     }
     
+    // Disable save button during upload
+    isUploadingPhoto = true;
+    const saveBtn = document.querySelector('button[onclick*="saveTrainerProfile"]');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Uploading photo...';
+    }
+    
     // Show preview immediately
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -166,10 +175,23 @@ async function handlePhotoUpload(e) {
         });
         
         showToast('Photo ready (saved locally)', 'success');
+    } finally {
+        // Re-enable save button
+        isUploadingPhoto = false;
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Profile & Continue';
+        }
     }
 }
 
 async function saveTrainerProfile() {
+    // Prevent saving while photo is uploading
+    if (isUploadingPhoto) {
+        showToast('Please wait for photo to finish uploading', 'error');
+        return;
+    }
+    
     clearProfileErrors();
     
     const membership = document.getElementById('profile-iosh-membership').value;
