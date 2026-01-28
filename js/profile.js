@@ -74,6 +74,7 @@ function showProfileSetupModal() {
                         <label class="checkbox-option"><input type="checkbox" name="qualifications" value="iosh-level3"><span>IOSH Level 3 Certificate</span></label>
                         <label class="checkbox-option"><input type="checkbox" name="qualifications" value="iosh-level6"><span>IOSH Level 6 Diploma</span></label>
                     </div>
+                    <input type="text" id="profile-other-qualifications" class="form-input" style="margin-top:0.75rem" placeholder="Other qualifications (comma separated)">
                 </div>
 
                 <!-- Courses They Can Deliver -->
@@ -217,6 +218,7 @@ async function saveTrainerProfile() {
             ioshMembership: membership,
             ioshApprovedTrainer: document.querySelector('input[name="iosh-approved"]:checked')?.value === 'yes',
             qualifications,
+            otherQualifications: document.getElementById('profile-other-qualifications').value.split(',').map(s => s.trim()).filter(Boolean),
             coursesCanDeliver: courses,
             otherCourses: document.getElementById('profile-other-courses').value.split(',').map(s => s.trim()).filter(Boolean),
             trainingYearsExperience: parseInt(trainingYears) || 0,
@@ -319,6 +321,7 @@ function showEditProfileModal() {
                         <label class="checkbox-option"><input type="checkbox" name="edit-qual" value="iosh-level3" ${p.qualifications?.includes('iosh-level3') ? 'checked' : ''}><span>IOSH L3</span></label>
                         <label class="checkbox-option"><input type="checkbox" name="edit-qual" value="iosh-level6" ${p.qualifications?.includes('iosh-level6') ? 'checked' : ''}><span>IOSH L6</span></label>
                     </div>
+                    <input type="text" id="edit-other-qualifications" class="form-input" style="margin-top:0.5rem" value="${p.otherQualifications?.join(', ') || ''}" placeholder="Other qualifications">
                 </div>
 
                 <div class="form-section">
@@ -369,6 +372,7 @@ async function updateTrainerProfile() {
         ioshMembership: document.getElementById('edit-iosh-membership').value,
         ioshApprovedTrainer: document.querySelector('input[name="edit-iosh-approved"]:checked')?.value === 'yes',
         qualifications: Array.from(document.querySelectorAll('input[name="edit-qual"]:checked')).map(c => c.value),
+        otherQualifications: document.getElementById('edit-other-qualifications').value.split(',').map(s => s.trim()).filter(Boolean),
         coursesCanDeliver: Array.from(document.querySelectorAll('input[name="edit-courses"]:checked')).map(c => c.value),
         otherCourses: document.getElementById('edit-other-courses').value.split(',').map(s => s.trim()).filter(Boolean),
         trainingYearsExperience: parseInt(document.getElementById('edit-training-years').value) || 0,
