@@ -42,6 +42,7 @@ function showProfileSetupModal() {
                         <option value="grad">Grad IOSH (Graduate Member)</option>
                         <option value="cert">Cert IOSH (Certified Member)</option>
                         <option value="cmiosh">CMIOSH (Chartered Member)</option>
+                        <option value="cfiosh">CFIOSH (Chartered Fellow)</option>
                     </select>
                 </div>
 
@@ -248,6 +249,7 @@ function showEditProfileModal() {
                         <option value="grad" ${p.ioshMembership === 'grad' ? 'selected' : ''}>Grad IOSH</option>
                         <option value="cert" ${p.ioshMembership === 'cert' ? 'selected' : ''}>Cert IOSH</option>
                         <option value="cmiosh" ${p.ioshMembership === 'cmiosh' ? 'selected' : ''}>CMIOSH</option>
+                        <option value="cfiosh" ${p.ioshMembership === 'cfiosh' ? 'selected' : ''}>CFIOSH</option>
                     </select>
                 </div>
 
@@ -344,7 +346,7 @@ function renderTrainerProfileCard() {
     const container = document.getElementById('trainer-profile-card');
     if (!container) return;
     
-    const labels = { none: 'No Membership', affiliate: 'Affiliate', tech: 'Tech IOSH', grad: 'Grad IOSH', cert: 'Cert IOSH', cmiosh: 'CMIOSH' };
+    const labels = { none: 'No Membership', affiliate: 'Affiliate', tech: 'Tech IOSH', grad: 'Grad IOSH', cert: 'Cert IOSH', cmiosh: 'CMIOSH', cfiosh: 'CFIOSH' };
     
     container.innerHTML = `
         <div class="profile-card">

@@ -118,7 +118,7 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .grid-cell.allocated { background: var(--tnh-blue); color: white; font-weight: 600; }
 .grid-cell.allocated-pending { background: var(--tnh-amber); color: var(--tnh-charcoal); font-weight: 600; }
 .grid-cell.allocated-confirmed { background: var(--tnh-blue); color: white; font-weight: 600; }
-.grid-cell.allocated-declined { background: #f87171; color: white; font-weight: 600; }
+.grid-cell.allocated-declined { background: #ef4444; color: white; font-weight: 600; }
 .grid-cell.delivered { background: #10b981; color: white; font-weight: 600; }
 .grid-cell.selected { background: #fbbf24; color: var(--tnh-charcoal); font-weight: 600; }
 .grid-cell.clickable { cursor: pointer; }
@@ -153,7 +153,7 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .legend-dot.unavailable-confirmed { background: #ef4444; }
 .legend-dot.allocated-pending { background: var(--tnh-amber); }
 .legend-dot.allocated-confirmed { background: var(--tnh-blue); }
-.legend-dot.allocated-declined { background: #f87171; }
+.legend-dot.allocated-declined { background: #ef4444; }
 .legend-dot.delivered { background: #10b981; }
 
 /* Decline Reason */

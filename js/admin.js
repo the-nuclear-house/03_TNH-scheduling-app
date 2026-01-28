@@ -323,7 +323,7 @@ function renderAdminViewHTML() {
                 <div class="legend-item"><span class="legend-dot selected"></span> Selected</div>
                 <div class="legend-item"><span class="legend-dot allocated-pending"></span> ⏳ Pending</div>
                 <div class="legend-item"><span class="legend-dot allocated-confirmed"></span> 📍💻 Confirmed</div>
-                <div class="legend-item"><span class="legend-dot allocated-declined"></span> ❌ Declined</div>
+                <div class="legend-item"><span class="legend-dot allocated-declined"></span> ✗ Declined</div>
                 <div class="legend-item"><span class="legend-dot delivered"></span> ✅ Delivered</div>
             </div>
         </div>
@@ -480,7 +480,7 @@ function renderOverviewGrid() {
                     content = alloc.trainingType === 'remote' ? '💻' : '📍';
                 } else if (alloc.status === 'declined') {
                     cls += ' allocated-declined';
-                    content = '❌';
+                    content = '✗';
                 } else {
                     // pending
                     cls += ' allocated-pending';
@@ -494,14 +494,14 @@ function renderOverviewGrid() {
                 clickHandler = `onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')"`;
             } else if (isAvail) {
                 cls += ' available';
-                content = '✓';
+                content = '';
                 if (!isOtherTrainerSelected) {
                     cls += ' clickable';
                     clickHandler = `onclick="toggleDateSelection('${trainer.id}','${trainer.name.replace(/'/g, "\\'")}','${trainer.email}','${dateKey}')"`;
                 }
             } else if (isUnavail) {
                 cls += ' unavailable-confirmed';
-                content = '✗';
+                content = '';
             } else {
                 cls += ' not-set';
             }
@@ -610,7 +610,8 @@ function renderTrainersManagement() {
         'tech': 'Tech IOSH',
         'grad': 'Grad IOSH',
         'cert': 'Cert IOSH',
-        'cmiosh': 'CMIOSH'
+        'cmiosh': 'CMIOSH',
+        'cfiosh': 'CFIOSH'
     };
     
     const qualLabels = {
@@ -697,7 +698,8 @@ function viewTrainerProfile(trainerId) {
         'tech': 'Tech IOSH (Technical Member)',
         'grad': 'Grad IOSH (Graduate Member)',
         'cert': 'Cert IOSH (Certified Member)',
-        'cmiosh': 'CMIOSH (Chartered Member)'
+        'cmiosh': 'CMIOSH (Chartered Member)',
+        'cfiosh': 'CFIOSH (Chartered Fellow)'
     };
     
     const courseLabels = {
