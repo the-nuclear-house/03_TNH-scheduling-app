@@ -104,10 +104,10 @@ function toggleDateSelection(trainerId, trainerName, trainerEmail, dateKey) {
 function openAllocationModal() {
     if (selectedDates.length === 0) return;
     
-    const datesDisplay = selectedDates
-        .sort()
-        .map(d => formatDateShort(new Date(d)))
-        .join(', ');
+    const sortedDates = selectedDates.sort();
+    const datesDisplay = sortedDates.length === 1
+        ? formatDateShort(new Date(sortedDates[0]))
+        : `${formatDateShort(new Date(sortedDates[0]))} - ${formatDateShort(new Date(sortedDates[sortedDates.length - 1]))} (${sortedDates.length} days)`;
     
     document.getElementById('modal-alloc-trainer').textContent = selectedTrainerName;
     document.getElementById('modal-alloc-dates').textContent = datesDisplay;

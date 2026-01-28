@@ -286,8 +286,6 @@ function renderTrainerAllocations() {
         `;
     }).join('');
 }
-    }).join('');
-}
 
 // Show decline modal with reason field
 function showDeclineModal(allocIds) {
