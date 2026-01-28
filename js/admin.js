@@ -330,8 +330,16 @@ function renderAdminViewHTML() {
         
         <div id="tab-trainers" class="tab-content hidden">
             <div class="content-header">
-                <h2>Manage Trainers</h2>
-                <p>View registered trainers and manage admin access.</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Manage Trainers</h2>
+                        <p>View registered trainers and manage admin access.</p>
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" id="show-archived-trainers" onchange="toggleArchivedTrainers()">
+                        <span>Show Archived</span>
+                    </label>
+                </div>
             </div>
             <div id="trainers-management" class="trainers-list"></div>
         </div>
@@ -432,7 +440,15 @@ async function loadAdminData() {
 function renderOverviewGrid() {
     document.getElementById('admin-month-year').textContent = `${monthNames[state.currentMonth]} ${state.currentYear}`;
     
-    const trainers = state.trainers.filter(t => !t.isAdmin);
+    const showArchived = document.getElementById('show-archived-trainers')?.checked || false;
+    
+    // Filter trainers - exclude admins and archived (unless toggle is on)
+    const trainers = state.trainers.filter(t => {
+        if (t.isAdmin) return false;
+        if (!showArchived && t.archived) return false;
+        return true;
+    });
+    
     const lastDay = new Date(state.currentYear, state.currentMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
     
@@ -453,7 +469,8 @@ function renderOverviewGrid() {
     }
     
     trainers.forEach(trainer => {
-        html += `<div class="grid-cell trainer-row-name">${trainer.name}</div>`;
+        const archivedLabel = trainer.archived ? ' 🗄️' : '';
+        html += `<div class="grid-cell trainer-row-name">${trainer.name}${archivedLabel}</div>`;
         for (let d = 1; d <= daysInMonth; d++) {
             const date = new Date(state.currentYear, state.currentMonth, d);
             const dateKey = getDateKey(date);
@@ -620,8 +637,18 @@ function renderTrainersManagement() {
     const container = document.getElementById('trainers-management');
     if (!container) return;
     
-    if (!state.trainers.length) {
-        container.innerHTML = '<p class="no-data">No trainers registered.</p>';
+    const showArchived = document.getElementById('show-archived-trainers')?.checked || false;
+    
+    // Filter trainers based on archived toggle
+    const filteredTrainers = state.trainers.filter(t => {
+        if (showArchived) return true; // Show all
+        return !t.archived; // Hide archived by default
+    });
+    
+    if (!filteredTrainers.length) {
+        container.innerHTML = showArchived 
+            ? '<p class="no-data">No archived trainers.</p>'
+            : '<p class="no-data">No trainers registered.</p>';
         return;
     }
     
@@ -644,21 +671,23 @@ function renderTrainersManagement() {
         'iosh-level6': 'IOSH L6'
     };
     
-    container.innerHTML = state.trainers.map(t => {
+    container.innerHTML = filteredTrainers.map(t => {
         // Count allocations for this trainer
         const trainerAllocations = state.allocations.filter(a => a.trainerId === t.id);
         const completedTrainings = trainerAllocations.filter(a => a.status === 'confirmed').length;
         
         const stars = renderStars(t.adminRating || 0);
+        const archivedClass = t.archived ? ' archived-trainer' : '';
         
         return `
-            <div class="trainer-profile-row">
+            <div class="trainer-profile-row${archivedClass}">
                 <div class="profile-photo">
                     ${t.photoURL ? `<img src="${t.photoURL}" alt="${t.name}">` : `<div class="photo-placeholder-large">${t.name?.charAt(0) || '?'}</div>`}
                 </div>
                 <div class="trainer-details">
                     <h4>
                         ${t.name}
+                        ${t.archived ? '<span class="badge" style="background: #f59e0b;">Archived</span>' : ''}
                         ${t.isAdmin ? '<span class="badge badge-warning">Admin</span>' : ''}
                         ${t.ioshApprovedTrainer ? '<span class="badge badge-success">IOSH Approved</span>' : ''}
                     </h4>
@@ -890,7 +919,13 @@ async function toggleAdmin(userId, makeAdmin) {
 // Make functions global
 window.initAdminView = initAdminView;
 window.toggleAdmin = toggleAdmin;
+window.toggleArchivedTrainers = toggleArchivedTrainers;
 window.toggleDateSelection = toggleDateSelection;
+
+function toggleArchivedTrainers() {
+    renderTrainersManagement();
+    renderOverviewGrid();
+}
 window.closeAllocationModal = closeAllocationModal;
 window.confirmAllocation = confirmAllocation;
 window.setTrainingType = setTrainingType;
@@ -899,6 +934,7 @@ window.showAllocationDetails = showAllocationDetails;
 window.closeAllocationDetailsModal = closeAllocationDetailsModal;
 window.markAsDelivered = markAsDelivered;
 window.confirmDeleteTrainer = confirmDeleteTrainer;
+window.deleteTrainerOption = deleteTrainerOption;
 window.proceedToReauth = proceedToReauth;
 window.executeTrainerDeletion = executeTrainerDeletion;
 window.closeDeleteModals = closeDeleteModals;
@@ -964,6 +1000,12 @@ window.sendReminderEmail = sendReminderEmail;
 
 // Delete trainer with confirmation and re-authentication
 let trainerToDelete = null;
+let deletionMode = 'remove'; // 'remove', 'archive', or 'delete'
+
+function deleteTrainerOption(mode) {
+    deletionMode = mode;
+    proceedToReauth();
+}
 
 function confirmDeleteTrainer(trainerId, trainerName) {
     trainerToDelete = { id: trainerId, name: trainerName };
@@ -971,22 +1013,29 @@ function confirmDeleteTrainer(trainerId, trainerName) {
     // Close the profile modal
     document.getElementById('view-trainer-modal')?.remove();
     
-    // Show confirmation modal
+    // Show confirmation modal with options
     const modal = document.createElement('div');
     modal.id = 'delete-confirm-modal';
     modal.className = 'modal';
     modal.innerHTML = `
         <div class="modal-content">
-            <h3>⚠️ Delete Trainer</h3>
-            <p>Are you sure you want to delete <strong>${trainerName}</strong>?</p>
-            <p style="color:var(--tnh-orange);font-size:0.9rem;margin-top:0.5rem;">
-                This will permanently remove their profile, availability data, and cannot be undone. 
-                Their allocation history will be preserved for records.
-            </p>
-            <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeDeleteModals()">Cancel</button>
-                <button class="btn btn-danger" onclick="proceedToReauth()">Yes, Delete Trainer</button>
+            <h3>Delete Trainer: ${trainerName}</h3>
+            <p>Choose how to handle this trainer's data:</p>
+            <div style="margin: 1.5rem 0; display: flex; flex-direction: column; gap: 1rem;">
+                <button class="btn btn-secondary" onclick="deleteTrainerOption('remove')" style="text-align: left; padding: 1rem;">
+                    <strong>Remove Trainer Only</strong><br>
+                    <span style="font-size: 0.875rem; opacity: 0.8;">Keep allocation history for records</span>
+                </button>
+                <button class="btn" onclick="deleteTrainerOption('archive')" style="text-align: left; padding: 1rem; background: #f59e0b; color: white;">
+                    <strong>Archive Trainer & History</strong><br>
+                    <span style="font-size: 0.875rem; opacity: 0.9;">Hide from view but keep recoverable</span>
+                </button>
+                <button class="btn btn-danger" onclick="deleteTrainerOption('delete')" style="text-align: left; padding: 1rem;">
+                    <strong>Delete Trainer & History</strong><br>
+                    <span style="font-size: 0.875rem; opacity: 0.9;">Permanently remove everything</span>
+                </button>
             </div>
+            <button class="btn btn-secondary" onclick="closeDeleteModals()">Cancel</button>
         </div>
     `;
     document.body.appendChild(modal);
@@ -1050,29 +1099,85 @@ async function executeTrainerDeletion() {
         
         await state.currentUser.reauthenticateWithCredential(credential);
         
-        // Authentication successful - proceed with deletion
-        showToast('Deleting trainer...', 'info');
-        
-        // Delete user document
-        await db.collection('users').doc(trainerToDelete.id).delete();
-        
-        // Delete availability document
-        await db.collection('availability').doc(trainerToDelete.id).delete();
-        
-        // Note: We keep allocations for historical records, just the trainer is removed
-        
-        // Try to delete their profile photo from storage
-        try {
-            const photoRef = firebase.storage().ref().child(`profile-photos/${trainerToDelete.id}`);
-            await photoRef.delete();
-        } catch (e) {
-            // Photo might not exist, that's fine
-            console.log('No profile photo to delete');
+        // Authentication successful - proceed based on mode
+        if (deletionMode === 'archive') {
+            showToast('Archiving trainer...', 'info');
+            
+            // Mark user as archived
+            await db.collection('users').doc(trainerToDelete.id).update({
+                archived: true,
+                archivedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            
+            // Mark all their allocations as archived
+            const allocations = await db.collection('allocations')
+                .where('trainerId', '==', trainerToDelete.id)
+                .get();
+            
+            const batch = db.batch();
+            allocations.forEach(doc => {
+                batch.update(doc.ref, { archived: true });
+            });
+            await batch.commit();
+            
+            showToast(`${trainerToDelete.name} archived`, 'success');
+            
+        } else if (deletionMode === 'delete') {
+            showToast('Deleting trainer and history...', 'info');
+            
+            // Delete user document
+            await db.collection('users').doc(trainerToDelete.id).delete();
+            
+            // Delete availability document
+            await db.collection('availability').doc(trainerToDelete.id).delete();
+            
+            // Delete all their allocations
+            const allocations = await db.collection('allocations')
+                .where('trainerId', '==', trainerToDelete.id)
+                .get();
+            
+            const batch = db.batch();
+            allocations.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            
+            // Try to delete their profile photo from storage
+            try {
+                const photoRef = firebase.storage().ref().child(`profile-photos/${trainerToDelete.id}`);
+                await photoRef.delete();
+            } catch (e) {
+                console.log('No profile photo to delete');
+            }
+            
+            showToast(`${trainerToDelete.name} permanently deleted`, 'success');
+            
+        } else {
+            // Mode: 'remove' - delete trainer but keep allocations
+            showToast('Removing trainer...', 'info');
+            
+            // Delete user document
+            await db.collection('users').doc(trainerToDelete.id).delete();
+            
+            // Delete availability document
+            await db.collection('availability').doc(trainerToDelete.id).delete();
+            
+            // Keep allocations for historical records
+            
+            // Try to delete their profile photo from storage
+            try {
+                const photoRef = firebase.storage().ref().child(`profile-photos/${trainerToDelete.id}`);
+                await photoRef.delete();
+            } catch (e) {
+                console.log('No profile photo to delete');
+            }
+            
+            showToast(`${trainerToDelete.name} removed (history kept)`, 'success');
         }
         
-        showToast(`${trainerToDelete.name} has been deleted`, 'success');
         closeDeleteModals();
         trainerToDelete = null;
+        deletionMode = 'remove';
         
         // Refresh the trainer list
         await loadAdminData();
