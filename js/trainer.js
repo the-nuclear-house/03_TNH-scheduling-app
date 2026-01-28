@@ -244,6 +244,8 @@ function renderTrainerAllocations() {
                         ${a.location ? `<span>📍 ${a.location}</span>` : ''}
                         ${a.client ? `<span>🏢 ${a.client}</span>` : ''}
                     </div>
+                    ${a.trainerRate ? `<div class="rate-info">💷 Rate: £${a.trainerRate}/day</div>` : ''}
+                    ${a.poNumber ? `<div class="po-info">📄 PO: ${a.poNumber}</div>` : ''}
                     ${a.notes ? `<div class="notes">${a.notes}</div>` : ''}
                     ${a.declineReason ? `<div class="decline-reason"><strong>Decline reason:</strong> ${a.declineReason}</div>` : ''}
                 </div>

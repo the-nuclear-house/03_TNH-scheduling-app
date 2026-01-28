@@ -116,23 +116,28 @@ function openAllocationModal() {
     document.getElementById('modal-alloc-client').value = '';
     document.getElementById('modal-alloc-notes').value = '';
     document.getElementById('modal-alloc-rate').value = '';
+    document.getElementById('modal-alloc-po').value = '';
     document.getElementById('modal-alloc-type').value = 'in-person';
     
     // Reset type buttons
     document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelector('.type-btn.in-person').classList.add('active');
     
-    // Show rate field only for freelancers
+    // Show rate and PO fields only for freelancers
     const trainer = state.trainers.find(t => t.id === selectedTrainerId);
     const rateField = document.getElementById('rate-field-group');
+    const poField = document.getElementById('po-field-group');
+    
     if (trainer?.employmentType === 'freelancer') {
         rateField.style.display = 'block';
+        poField.style.display = 'block';
         // Pre-fill with trainer's default rate if set
         if (trainer.dayRate) {
             document.getElementById('modal-alloc-rate').value = trainer.dayRate;
         }
     } else {
         rateField.style.display = 'none';
+        poField.style.display = 'none';
     }
     
     document.getElementById('allocation-modal').classList.remove('hidden');
@@ -155,6 +160,7 @@ async function confirmAllocation() {
     const notes = document.getElementById('modal-alloc-notes').value;
     const trainingType = document.getElementById('modal-alloc-type').value;
     const rate = document.getElementById('modal-alloc-rate').value;
+    const poNumber = document.getElementById('modal-alloc-po').value;
     
     if (!title) {
         showToast('Please enter a training title', 'error');
@@ -184,13 +190,26 @@ async function confirmAllocation() {
                 createdBy: state.currentUser.uid
             };
             
-            // Only add rate for freelancers
-            if (isFreelancer && rate) {
-                allocData.trainerRate = parseFloat(rate);
+            // Only add rate and PO for freelancers
+            if (isFreelancer) {
+                if (rate) allocData.trainerRate = parseFloat(rate);
+                if (poNumber) allocData.poNumber = poNumber;
             }
             
             await db.collection('allocations').add(allocData);
         }
+        
+        // Send email notification to trainer
+        sendTrainingAssignmentEmail({
+            trainerName: selectedTrainerName,
+            trainerEmail: selectedTrainerEmail,
+            title,
+            dates: formatDateRange(selectedDates),
+            type: trainingType === 'remote' ? 'Remote' : 'In Person',
+            location: location || 'N/A',
+            client: client || 'N/A',
+            notes: notes || 'None'
+        });
         
         showToast(`Training allocated for ${selectedDates.length} date(s)`, 'success');
         closeAllocationModal();
@@ -199,6 +218,61 @@ async function confirmAllocation() {
     } catch (e) {
         console.error(e);
         showToast('Error allocating training', 'error');
+    }
+}
+
+// Format date range for email
+function formatDateRange(dates) {
+    if (dates.length === 1) {
+        return formatDate(new Date(dates[0]));
+    }
+    const sorted = dates.sort();
+    const start = formatDateShort(new Date(sorted[0]));
+    const end = formatDateShort(new Date(sorted[sorted.length - 1]));
+    return `${start} - ${end} (${dates.length} days)`;
+}
+
+// Send training assignment email
+function sendTrainingAssignmentEmail(params) {
+    try {
+        emailjs.send(emailjsConfig.serviceId, emailjsConfig.templateId, {
+            trainer_name: params.trainerName,
+            trainer_email: params.trainerEmail,
+            training_title: params.title,
+            training_dates: params.dates,
+            training_type: params.type,
+            training_location: params.location,
+            training_client: params.client,
+            training_notes: params.notes
+        });
+        console.log('Assignment email sent to', params.trainerEmail);
+    } catch (error) {
+        console.error('Email send error:', error);
+        // Don't show error to user - email is nice-to-have, not critical
+    }
+}
+
+// Send reminder email
+function sendReminderEmail(alloc) {
+    try {
+        const dates = state.allocations
+            .filter(a => a.groupId === alloc.groupId)
+            .map(a => a.date)
+            .sort();
+        
+        emailjs.send(emailjsConfig.serviceId, emailjsConfig.reminderTemplateId, {
+            trainer_name: alloc.trainerName,
+            trainer_email: alloc.trainerEmail,
+            training_title: alloc.title,
+            training_dates: formatDateRange(dates),
+            training_location: alloc.location || 'N/A',
+            training_client: alloc.client || 'N/A'
+        });
+        
+        showToast('Reminder sent to ' + alloc.trainerName, 'success');
+    } catch (error) {
+        console.error('Email send error:', error);
+        showToast('Error sending reminder', 'error');
     }
 }
 
@@ -304,6 +378,10 @@ function renderAdminViewHTML() {
                     <label>Trainer Rate (£) <span class="hint">- Freelancer only, not visible to trainer</span></label>
                     <input type="number" id="modal-alloc-rate" placeholder="e.g., 350">
                 </div>
+                <div class="form-group" id="po-field-group" style="display:none;">
+                    <label>PO Number <span class="hint">- Purchase Order reference</span></label>
+                    <input type="text" id="modal-alloc-po" placeholder="e.g., PO-2026-001">
+                </div>
                 <div class="form-group">
                     <label>Notes</label>
                     <textarea id="modal-alloc-notes" rows="2" placeholder="Any additional info..."></textarea>
@@ -370,13 +448,16 @@ function renderOverviewGrid() {
     for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(state.currentYear, state.currentMonth, d);
         const dayLetter = ['S','M','T','W','T','F','S'][date.getDay()];
-        html += `<div class="grid-header">${d}<br><small>${dayLetter}</small></div>`;
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        html += `<div class="grid-header ${isWeekend ? 'weekend' : ''}">${d}<br><small>${dayLetter}</small></div>`;
     }
     
     trainers.forEach(trainer => {
         html += `<div class="grid-cell trainer-row-name">${trainer.name}</div>`;
         for (let d = 1; d <= daysInMonth; d++) {
-            const dateKey = getDateKey(new Date(state.currentYear, state.currentMonth, d));
+            const date = new Date(state.currentYear, state.currentMonth, d);
+            const dateKey = getDateKey(date);
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const availStatus = trainer.availability[dateKey];
             const isAvail = availStatus === 'available' || availStatus === true;
             const isUnavail = availStatus === 'unavailable';
@@ -385,6 +466,7 @@ function renderOverviewGrid() {
             const isOtherTrainerSelected = selectedTrainerId && selectedTrainerId !== trainer.id;
             
             let cls = 'grid-cell';
+            if (isWeekend) cls += ' weekend';
             let content = '';
             let clickHandler = '';
             
@@ -796,6 +878,33 @@ window.confirmDeleteTrainer = confirmDeleteTrainer;
 window.proceedToReauth = proceedToReauth;
 window.executeTrainerDeletion = executeTrainerDeletion;
 window.closeDeleteModals = closeDeleteModals;
+window.sendReminderForAllocation = sendReminderForAllocation;
+
+// Send reminder email for allocation
+async function sendReminderForAllocation(allocId) {
+    const alloc = state.allocations.find(a => a.id === allocId);
+    if (!alloc) return;
+    
+    // Find all allocations in the same group for date range
+    const groupAllocs = alloc.groupId 
+        ? state.allocations.filter(a => a.groupId === alloc.groupId)
+        : [alloc];
+    
+    const sortedDates = groupAllocs.map(a => a.date).sort();
+    const dateDisplay = sortedDates.length === 1 
+        ? formatDate(new Date(sortedDates[0]))
+        : `${formatDateShort(new Date(sortedDates[0]))} - ${formatDateShort(new Date(sortedDates[sortedDates.length - 1]))}`;
+    
+    await sendTrainingReminderEmail({
+        trainerName: alloc.trainerName,
+        trainerEmail: alloc.trainerEmail,
+        title: alloc.title,
+        dates: dateDisplay,
+        location: alloc.location,
+        client: alloc.client
+    });
+}
+window.sendReminderEmail = sendReminderEmail;
 
 // Delete trainer with confirmation and re-authentication
 let trainerToDelete = null;
@@ -965,6 +1074,7 @@ function showAllocationDetails(allocId) {
             ${alloc.status === 'declined' && alloc.declineReason ? `<div class="detail-row decline-reason-display"><strong>Decline Reason:</strong> ${alloc.declineReason}</div>` : ''}
             ${alloc.delivered ? `<div class="detail-row"><strong>Delivered:</strong> ✅ Yes</div>` : ''}
             ${isFreelancer && alloc.trainerRate ? `<div class="detail-row"><strong>Rate:</strong> £${alloc.trainerRate}/day (Total: £${alloc.trainerRate * sortedDates.length})</div>` : ''}
+            ${isFreelancer && alloc.poNumber ? `<div class="detail-row"><strong>PO Number:</strong> ${alloc.poNumber}</div>` : ''}
             ${alloc.notes ? `<div class="detail-row"><strong>Notes:</strong> ${alloc.notes}</div>` : ''}
         </div>
     `;
@@ -974,8 +1084,11 @@ function showAllocationDetails(allocId) {
     
     let actionButtons = `<button class="btn btn-secondary" onclick="closeAllocationDetailsModal()">Close</button>`;
     
-    if (alloc.status === 'declined') {
-        // Offer to re-allocate or cancel
+    if (alloc.status === 'pending') {
+        actionButtons += `<button class="btn btn-primary" onclick="sendReminderForAllocation('${alloc.id}')">📧 Send Reminder</button>`;
+        actionButtons += `<button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Cancel Training</button>`;
+    } else if (alloc.status === 'declined') {
+        // Offer to remove
         actionButtons += `<button class="btn btn-danger" onclick="cancelTraining('${allIds}'); closeAllocationDetailsModal();">Remove</button>`;
     } else if (!alloc.delivered) {
         actionButtons += `<button class="btn btn-success" onclick="markAsDelivered('${allIds}')">Mark Delivered</button>`;

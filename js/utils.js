@@ -65,3 +65,51 @@ function isWeekend(date) {
 }
 
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Email sending functions
+async function sendTrainingAssignmentEmail(allocation) {
+    try {
+        const templateParams = {
+            trainer_name: allocation.trainerName,
+            trainer_email: allocation.trainerEmail,
+            training_title: allocation.title,
+            training_dates: allocation.dates || formatDate(new Date(allocation.date)),
+            training_type: allocation.trainingType === 'remote' ? 'Remote' : 'In Person',
+            training_location: allocation.location || 'N/A',
+            training_client: allocation.client || 'N/A',
+            training_notes: allocation.notes || 'None'
+        };
+        
+        await emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.templateId,
+            templateParams
+        );
+        console.log('Assignment email sent successfully');
+    } catch (error) {
+        console.error('Error sending assignment email:', error);
+    }
+}
+
+async function sendTrainingReminderEmail(allocation) {
+    try {
+        const templateParams = {
+            trainer_name: allocation.trainerName,
+            trainer_email: allocation.trainerEmail,
+            training_title: allocation.title,
+            training_dates: allocation.dates || formatDate(new Date(allocation.date)),
+            training_location: allocation.location || 'N/A',
+            training_client: allocation.client || 'N/A'
+        };
+        
+        await emailjs.send(
+            emailjsConfig.serviceId,
+            emailjsConfig.reminderTemplateId,
+            templateParams
+        );
+        showToast('Reminder email sent', 'success');
+    } catch (error) {
+        console.error('Error sending reminder email:', error);
+        showToast('Error sending reminder email', 'error');
+    }
+}
