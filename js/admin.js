@@ -888,6 +888,7 @@ async function toggleAdmin(userId, makeAdmin) {
 }
 
 // Make functions global
+window.initAdminView = initAdminView;
 window.toggleAdmin = toggleAdmin;
 window.toggleDateSelection = toggleDateSelection;
 window.closeAllocationModal = closeAllocationModal;
