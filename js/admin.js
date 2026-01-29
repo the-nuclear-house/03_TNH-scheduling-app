@@ -288,6 +288,7 @@ function renderAdminViewHTML() {
             <button class="tab-btn active" data-tab="overview">Availability Overview</button>
             <button class="tab-btn" data-tab="trainers">Manage Trainers</button>
             <button class="tab-btn" data-tab="allocations">All Allocations</button>
+            <button class="btn btn-secondary" onclick="exportAllData()" style="margin-left: auto;">📥 Export Data</button>
         </div>
         
         <div id="tab-overview" class="tab-content">
@@ -1334,3 +1335,170 @@ async function markAsDelivered(idsString) {
         showToast('Error updating', 'error');
     }
 }
+
+// Export all data to Excel
+async function exportAllData() {
+    showToast('Preparing export...', 'info');
+    
+    try {
+        const membershipLabels = {
+            'none': 'None',
+            'affiliate': 'Affiliate',
+            'tech': 'Tech IOSH',
+            'grad': 'Grad IOSH',
+            'cert': 'Cert IOSH',
+            'cmiosh': 'CMIOSH',
+            'cfiosh': 'CFIOSH'
+        };
+        
+        const courseLabels = {
+            'managing-safely': 'IOSH Managing Safely',
+            'working-safely': 'IOSH Working Safely',
+            'managing-safely-refresher': 'Managing Safely Refresher',
+            'leading-safely': 'IOSH Leading Safely'
+        };
+        
+        const qualLabels = {
+            'iosh-train-trainer': 'IOSH Train the Trainer',
+            'aet-ptlls': 'Level 3 AET/PTLLS',
+            'nebosh-gc': 'NEBOSH General Certificate',
+            'nebosh-diploma': 'NEBOSH Diploma',
+            'iosh-level3': 'IOSH Level 3 Certificate',
+            'iosh-level6': 'IOSH Level 6 Diploma'
+        };
+        
+        // Sheet 1: Trainers
+        const trainersData = state.trainers.filter(t => !t.isAdmin).map(t => {
+            const trainerAllocs = state.allocations.filter(a => a.trainerId === t.id);
+            const delivered = trainerAllocs.filter(a => a.delivered).length;
+            const confirmed = trainerAllocs.filter(a => a.status === 'confirmed' && !a.delivered).length;
+            const pending = trainerAllocs.filter(a => a.status === 'pending').length;
+            
+            return {
+                'Name': t.name || '',
+                'Email': t.email || '',
+                'Phone': t.phone || '',
+                'Employment Type': t.employmentType === 'freelancer' ? 'Freelancer' : 'Employee',
+                'Day Rate (£)': t.employmentType === 'freelancer' ? (t.dayRate || '') : 'N/A',
+                'IOSH Membership': membershipLabels[t.ioshMembership] || t.ioshMembership || '',
+                'IOSH Approved Trainer': t.ioshApprovedTrainer ? 'Yes' : 'No',
+                'Qualifications': (t.qualifications || []).map(q => qualLabels[q] || q).join(', '),
+                'Other Qualifications': (t.otherQualifications || []).join(', '),
+                'Courses Can Deliver': (t.coursesCanDeliver || []).map(c => courseLabels[c] || c).join(', '),
+                'Other Courses': (t.otherCourses || []).join(', '),
+                'Training Experience (Years)': t.trainingYearsExperience || 0,
+                'H&S Sector Experience (Years)': t.hsSectorYears || 0,
+                'Bio': t.bio || '',
+                'Admin Rating': t.adminRating || 0,
+                'Admin Notes': t.adminNotes || '',
+                'Trainings Delivered': delivered,
+                'Trainings Confirmed': confirmed,
+                'Trainings Pending': pending,
+                'Archived': t.archived ? 'Yes' : 'No',
+                'Created': t.createdAt?.toDate?.()?.toLocaleDateString() || ''
+            };
+        });
+        
+        // Sheet 2: All Allocations
+        const allocationsData = state.allocations.map(a => ({
+            'Training Title': a.title || '',
+            'Trainer': a.trainerName || '',
+            'Trainer Email': a.trainerEmail || '',
+            'Date': a.date || '',
+            'Type': a.trainingType === 'remote' ? 'Remote' : 'In Person',
+            'Location': a.location || '',
+            'Client': a.client || '',
+            'Status': a.delivered ? 'Delivered' : (a.status || ''),
+            'Decline Reason': a.declineReason || '',
+            'Trainer Rate (£)': a.trainerRate || '',
+            'PO Number': a.poNumber || '',
+            'Notes': a.notes || '',
+            'Group ID': a.groupId || '',
+            'Created': a.createdAt?.toDate?.()?.toLocaleDateString() || '',
+            'Responded': a.respondedAt?.toDate?.()?.toLocaleDateString() || '',
+            'Delivered Date': a.deliveredAt?.toDate?.()?.toLocaleDateString() || '',
+            'Archived': a.archived ? 'Yes' : 'No'
+        }));
+        
+        // Sheet 3: Summary Statistics
+        const totalTrainers = state.trainers.filter(t => !t.isAdmin && !t.archived).length;
+        const totalFreelancers = state.trainers.filter(t => !t.isAdmin && !t.archived && t.employmentType === 'freelancer').length;
+        const totalEmployees = totalTrainers - totalFreelancers;
+        const totalDelivered = state.allocations.filter(a => a.delivered).length;
+        const totalConfirmed = state.allocations.filter(a => a.status === 'confirmed' && !a.delivered).length;
+        const totalPending = state.allocations.filter(a => a.status === 'pending').length;
+        const totalDeclined = state.allocations.filter(a => a.status === 'declined').length;
+        
+        const summaryData = [
+            { 'Metric': 'Total Active Trainers', 'Value': totalTrainers },
+            { 'Metric': 'Employees', 'Value': totalEmployees },
+            { 'Metric': 'Freelancers', 'Value': totalFreelancers },
+            { 'Metric': '', 'Value': '' },
+            { 'Metric': 'Total Trainings Delivered', 'Value': totalDelivered },
+            { 'Metric': 'Trainings Confirmed (Upcoming)', 'Value': totalConfirmed },
+            { 'Metric': 'Trainings Pending Response', 'Value': totalPending },
+            { 'Metric': 'Trainings Declined', 'Value': totalDeclined },
+            { 'Metric': '', 'Value': '' },
+            { 'Metric': 'Export Date', 'Value': new Date().toLocaleDateString() },
+            { 'Metric': 'Export Time', 'Value': new Date().toLocaleTimeString() }
+        ];
+        
+        // Sheet 4: Availability (current month)
+        const availabilityData = [];
+        const nonAdminTrainers = state.trainers.filter(t => !t.isAdmin && !t.archived);
+        
+        nonAdminTrainers.forEach(trainer => {
+            const avail = state.availability[trainer.id] || {};
+            Object.keys(avail).forEach(date => {
+                if (avail[date]) {
+                    availabilityData.push({
+                        'Trainer': trainer.name,
+                        'Date': date,
+                        'Available': avail[date] === 'available' ? 'Yes' : 'No'
+                    });
+                }
+            });
+        });
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Add sheets
+        const ws1 = XLSX.utils.json_to_sheet(trainersData);
+        XLSX.utils.book_append_sheet(wb, ws1, 'Trainers');
+        
+        const ws2 = XLSX.utils.json_to_sheet(allocationsData);
+        XLSX.utils.book_append_sheet(wb, ws2, 'Allocations');
+        
+        const ws3 = XLSX.utils.json_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, ws3, 'Summary');
+        
+        if (availabilityData.length > 0) {
+            const ws4 = XLSX.utils.json_to_sheet(availabilityData);
+            XLSX.utils.book_append_sheet(wb, ws4, 'Availability');
+        }
+        
+        // Set column widths
+        const setColWidths = (ws, widths) => {
+            ws['!cols'] = widths.map(w => ({ wch: w }));
+        };
+        
+        setColWidths(ws1, [20, 30, 15, 12, 12, 15, 18, 40, 30, 40, 30, 12, 12, 40, 12, 30, 15, 15, 15, 10, 12]);
+        setColWidths(ws2, [30, 20, 30, 12, 10, 25, 25, 12, 30, 12, 15, 40, 15, 12, 12, 15, 10]);
+        setColWidths(ws3, [30, 15]);
+        
+        // Generate filename with date
+        const today = new Date();
+        const dateStr = today.toISOString().split('T')[0];
+        const filename = `TNH_Scheduling_Export_${dateStr}.xlsx`;
+        
+        // Download
+        XLSX.writeFile(wb, filename);
+        
+        showToast('Export complete!', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showToast('Export failed: ' + error.message, 'error');
+    }
+}
+window.exportAllData = exportAllData;

@@ -101,7 +101,7 @@ body { font-family: var(--font-primary); background: var(--tnh-white); color: va
 .calendar-day.weekend { background: var(--tnh-white); }
 
 /* Admin Tabs */
-.admin-tabs { display: flex; gap: 0.25rem; margin-bottom: 2rem; border-bottom: 2px solid var(--tnh-light-grey); padding-bottom: 0.25rem; overflow-x: auto; }
+.admin-tabs { display: flex; gap: 0.25rem; margin-bottom: 2rem; border-bottom: 2px solid var(--tnh-light-grey); padding-bottom: 0.25rem; overflow-x: auto; align-items: center; flex-wrap: wrap; }
 .tab-btn { padding: 0.5rem 1.5rem; background: transparent; border: none; border-radius: 8px 8px 0 0; font-family: inherit; font-size: 0.9375rem; font-weight: 500; color: var(--tnh-steel); cursor: pointer; white-space: nowrap; }
 .tab-btn:hover { background: var(--tnh-white); color: var(--tnh-charcoal); }
 .tab-btn.active { background: var(--tnh-blue); color: white; }
