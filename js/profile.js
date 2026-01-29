@@ -229,7 +229,8 @@ async function saveTrainerProfile() {
             profileUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
         
-        await db.collection('users').doc(state.currentUser.uid).update(data);
+        // Use set with merge to create document if it doesn't exist
+        await db.collection('users').doc(state.currentUser.uid).set(data, { merge: true });
         state.userProfile = { ...state.userProfile, ...data };
         document.getElementById('profile-setup-modal').remove();
         showToast('Profile saved', 'success');
@@ -383,7 +384,7 @@ async function updateTrainerProfile() {
     if (uploadedPhotoURL) data.photoURL = uploadedPhotoURL;
     
     try {
-        await db.collection('users').doc(state.currentUser.uid).update(data);
+        await db.collection('users').doc(state.currentUser.uid).set(data, { merge: true });
         state.userProfile = { ...state.userProfile, ...data };
         closeEditProfileModal();
         showToast('Profile updated', 'success');
